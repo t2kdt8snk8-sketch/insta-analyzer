@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InstaTrend Pro - Ultimate Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* 메인 탭 스타일 */
+        .main-tab-active {
+            border-bottom: 3px solid #0f172a;
+            color: #0f172a;
+            font-weight: 800;
+        }
+
+        .main-tab-inactive {
+            color: #64748b;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+        }
+
+        /* 서브 탭 스타일 */
+        .sub-tab-active {
+            background-color: #4f46e5;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+
+        .sub-tab-inactive {
+            background-color: white;
+            color: #64748b;
+            font-weight: 500;
+            border: 1px solid #e2e8f0;
+        }
+
+        .sub-tab-inactive:hover {
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+
+        /* 유틸리티 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .data-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.3rem;
+            display: block;
+        }
+
+        .section-headline {
+            position: relative;
+            padding-left: 14px;
+            margin-bottom: 1.5rem;
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 1.25rem;
+        }
+
+        .section-headline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 10%;
+            height: 80%;
+            width: 5px;
+            background-color: #4f46e5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 h-screen flex overflow-hidden">
+
+    <aside class="w-16 bg-[#0B1120] flex flex-col items-center py-6 border-r border-slate-800 z-20 shrink-0">
+        <div
+            class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center font-black text-white mb-8 shadow-lg text-sm">
+            TM</div>
+        <nav class="space-y-4 w-full px-2">
+            <a href="#" class="w-full h-12 flex items-center justify-center bg-white/10 text-white rounded-xl"><span
+                    class="text-xl">📊</span></a>
+            <a href="#"
+                class="w-full h-12 flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-white rounded-xl transition"><span
+                    class="text-xl">⚙️</span></a>
+        </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50/50">
+
+        <header class="bg-white border-b border-slate-200 z-10 shrink-0 pt-4 px-8">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">AI Trend Analytics Suite <span
+                        class="text-xs ml-2 bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full align-middle">PRO</span>
+                </h1>
+                <button
+                    class="bg-slate-900 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-slate-800">리포트
+                    다운로드</button>
+            </div>
+            <div class="flex space-x-8">
+                <button onclick="switchMainTab('single')" id="main-tab-single"
+                    class="main-tab-active pb-3 px-1 text-sm transition-all">단일 계정 딥다이브</button>
+                <button onclick="switchMainTab('trend')" id="main-tab-trend"
+                    class="main-tab-inactive pb-3 px-1 text-sm transition-all">트렌드 리서치 (종합)</button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-6 lg:p-8">
+            <div class="max-w-[1400px] mx-auto w-full">
+
+                <div id="mode-single" class="block">
+
+                    <div
+                        class="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-flex">
+                        <button onclick="switchSubTab('single', 'overview')" id="sub-single-overview"
+                            class="sub-tab-active px-5 py-2 rounded-lg text-sm transition-all">1. 오버뷰 & 요약</button>
+                        <button onclick="switchSubTab('single', 'visual')" id="sub-single-visual"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">2. 비주얼 분석</button>
+                        <button onclick="switchSubTab('single', 'caption')" id="sub-single-caption"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">3. 캡션 & 소통</button>
+                        <button onclick="switchSubTab('single', 'strategy')" id="sub-single-strategy"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">4. 전략 & SWOT</button>
+                    </div>
+
+                    <div id="single-pane-overview" class="space-y-6 block">
+                        <h2 class="section-headline">계정 오버뷰 (원본 데이터 수집)</h2>
+                        <section
+                            class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col xl:flex-row">
+                            <div class="p-6 xl:w-1/3 bg-slate-50/50 border-r border-slate-100">
+                                <span class="data-label">Profile Data</span>
+                                <div class="flex items-start gap-4 mb-4">
+                                    <div
+                                        class="w-20 h-20 bg-slate-300 rounded-full border-2 border-white shadow-sm flex-shrink-0">
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xl font-bold">@brand_a_official <span
+                                                class="text-blue-500 text-sm">✔️</span></h3>
+                                        <p class="text-sm font-semibold text-slate-700">브랜드 에이</p>
+                                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">미니멀 라이프스타일 제안. 매주 금요일 새로운
+                                            영감.</p>
+                                    </div>
+                                </div>
+                                <div
+                                    class="grid grid-cols-3 gap-2 text-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                    <div><span class="block text-xs text-slate-500">팔로워</span><span
+                                            class="font-bold text-slate-900">124K</span></div>
+                                    <div class="border-x border-slate-100"><span
+                                            class="block text-xs text-slate-500">팔로잉</span><span
+                                            class="font-bold text-slate-900">45</span></div>
+                                    <div><span class="block text-xs text-slate-500">게시물</span><span
+                                            class="font-bold text-slate-900">1,208</span></div>
+                                </div>
+                            </div>
+                            <div class="p-6 xl:w-2/3 overflow-hidden">
+                                <div class="flex justify-between items-center mb-4"><span class="data-label">Recent
+                                        Posts (최근 N개 데이터)</span></div>
+                                <div class="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+                                    <div class="min-w-[140px]">
+                                        <div class="w-full aspect-square bg-slate-200 rounded-lg mb-2 relative"><span
+                                                class="absolute top-1 right-1 bg-white/90 text-[10px] px-1 rounded font-bold">릴스</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500">❤️12K 💬340 • 03.18</div>
+                                    </div>
+                                    <div class="min-w-[140px]">
+                                        <div class="w-full aspect-square bg-slate-200 rounded-lg mb-2 relative"><span
+                                                class="absolute top-1 right-1 bg-white/90 text-[10px] px-1 rounded font-bold">카루셀</span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-500">❤️8.5K 💬120 • 03.15</div>
+                                    </div>
+                                    <div class="min-w-[140px]">
+                                        <div
+                                            class="w-full aspect-square bg-slate-100 border border-slate-200 rounded-lg mb-2">
+                                        </div>
+                                        <div class="text-[10px] text-slate-500">❤️5K 💬80 • 03.12</div>
+                                    </div>
+                                    <div class="min-w-[140px]">
+                                        <div
+                                            class="w-full aspect-square bg-slate-100 border border-slate-200 rounded-lg mb-2">
+                                        </div>
+                                        <div class="text-[10px] text-slate-500">❤️6.2K 💬95 • 03.10</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div class="bg-indigo-900 p-8 rounded-2xl shadow-lg relative overflow-hidden text-white">
+                            <div
+                                class="absolute right-0 top-0 w-64 h-64 bg-indigo-500 rounded-full mix-blend-screen filter blur-3xl opacity-30">
+                            </div>
+                            <span class="text-indigo-300 font-bold text-xs tracking-wider uppercase mb-2 block">AI 종합 한줄
+                                요약 (Brand Positioning)</span>
+                            <p class="text-xl md:text-2xl font-bold leading-snug relative z-10">"자극적인 마케팅을 배제하고, 시각적 휴식과
+                                다정한 소통을 무기로 삼은 디지털 시대의 오아시스 포지셔닝."</p>
+                        </div>
+                    </div>
+
+                    <div id="single-pane-visual" class="space-y-6 hidden">
+                        <h2 class="section-headline">비주얼 분석 (이미지 직접 분석)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">피드 톤 (Tone & Palette)</span>
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="flex -space-x-2">
+                                        <div
+                                            class="w-10 h-10 rounded-full bg-[#EADDCA] border-2 border-white shadow-sm">
+                                        </div>
+                                        <div
+                                            class="w-10 h-10 rounded-full bg-[#D2B48C] border-2 border-white shadow-sm">
+                                        </div>
+                                        <div
+                                            class="w-10 h-10 rounded-full bg-[#8B7355] border-2 border-white shadow-sm">
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded">웜/뉴트럴톤</span>
+                                </div>
+                                <ul class="text-sm text-slate-600 space-y-1">
+                                    <li><strong class="text-slate-800">채도/밝기:</strong> 저채도, 중간 밝기 유지</li>
+                                    <li><strong class="text-slate-800">필터 일관성:</strong> 95% 일치 (미세한 노이즈 텍스처 공통 적용)</li>
+                                </ul>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">콘텐츠 유형 (Content Type)</span>
+                                <ul class="text-sm text-slate-600 space-y-2 mt-2">
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">주요
+                                            피사체:</span> 인테리어 소품, 여백이 많은 풍경</li>
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">인물 등장
+                                            방식:</span> 얼굴 없는 실루엣, 손끝 등 부분 노출</li>
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">제품 촬영
+                                            스타일:</span> 스튜디오 컷 배제, 일상 속 자연스러운 눕혀찍기</li>
+                                </ul>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">구도 & 레이아웃 (Layout)</span>
+                                <ul class="text-sm text-slate-600 space-y-2 mt-2">
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">구도 패턴:</span>
+                                        중앙 집중형(60%), 탑다운 뷰(40%) / 개수 일정함</li>
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">여백 활용:</span>
+                                        이미지 상하단에 30% 이상의 네거티브 스페이스 확보</li>
+                                    <li class="flex gap-2"><span class="font-bold text-slate-800 shrink-0">텍스트
+                                            오버레이:</span> 정보성 텍스트 0%, 시리즈물 표지에만 극소 사용</li>
+                                </ul>
+                            </div>
+                            <div
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <div>
+                                    <span class="data-label">그리드 전략 & 아이덴티티</span>
+                                    <p class="text-sm text-slate-600 mb-1"><strong class="text-slate-800">패턴
+                                            유무:</strong> 인물과 사물을 교차하는 체크보드 그리드</p>
+                                    <p class="text-sm text-slate-600 mb-4"><strong class="text-slate-800">비율:</strong>
+                                        단일 이미지(30%) / 카루셀(50%) / 릴스(20%)</p>
+                                </div>
+                                <div class="bg-slate-50 p-4 rounded-xl">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-xs font-bold text-slate-700">비주얼 아이덴티티 강도 (즉시 인식 가능성)</span>
+                                        <span class="text-indigo-600 font-extrabold text-lg">8.5/10</span>
+                                    </div>
+                                    <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                        <div class="bg-indigo-600 h-2.5 rounded-full" style="width: 85%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="single-pane-caption" class="space-y-6 hidden">
+                        <h2 class="section-headline">캡션 분석 (텍스트 & 커뮤니케이션)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">톤 & 매너 (Tone & Manner)</span>
+                                <ul class="text-sm text-slate-600 space-y-2 mt-2">
+                                    <li><strong class="text-slate-800">말투 스타일:</strong> 정중하고 다정한 '-해요'체</li>
+                                    <li><strong class="text-slate-800">감성 키워드:</strong> 온기, 휴식, 나만의 시간, 느림</li>
+                                    <li><strong class="text-slate-800">이모지 빈도/유형:</strong> 사용 빈도 낮음. 🤍, 🌿, ✨ 위주로 절제
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">콘텐츠 카테고리 비율</span>
+                                <div class="flex h-4 rounded-full overflow-hidden my-3">
+                                    <div class="bg-indigo-500 w-[50%]" title="감성형 50%"></div>
+                                    <div class="bg-blue-400 w-[30%]" title="소통형 30%"></div>
+                                    <div class="bg-teal-400 w-[10%]" title="정보형 10%"></div>
+                                    <div class="bg-slate-300 w-[10%]" title="프로모션형 10%"></div>
+                                </div>
+                                <div class="flex gap-3 text-xs font-semibold text-slate-600 mb-3 flex-wrap">
+                                    <span class="flex items-center gap-1"><span
+                                            class="w-2 h-2 rounded-full bg-indigo-500"></span>감성형 50%</span>
+                                    <span class="flex items-center gap-1"><span
+                                            class="w-2 h-2 rounded-full bg-blue-400"></span>소통형 30%</span>
+                                    <span class="flex items-center gap-1"><span
+                                            class="w-2 h-2 rounded-full bg-teal-400"></span>정보 10%</span>
+                                    <span class="flex items-center gap-1"><span
+                                            class="w-2 h-2 rounded-full bg-slate-300"></span>프로모션 10%</span>
+                                </div>
+                                <p class="text-sm text-slate-800 mt-2"><strong>주력 테마 TOP3:</strong> 1.주말 루틴 2.홈카페 세팅
+                                    3.영감의 문장</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label">캡션 & 해시태그 전략</span>
+                                <div class="space-y-4 mt-2">
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-800 block mb-1">작성 전략</span>
+                                        <p class="text-sm text-slate-600 mb-1"><strong
+                                                class="text-slate-700">Hook:</strong> 공감 유도 질문형 ("오늘 아침 공기 어땠나요?")</p>
+                                        <p class="text-sm text-slate-600 mb-1"><strong
+                                                class="text-slate-700">단락:</strong> 2-3줄마다 빈 줄(여백)을 넣어 긴 호흡 유지</p>
+                                        <p class="text-sm text-slate-600"><strong class="text-slate-700">CTA:</strong>
+                                            낮은 허들의 질문 ("여러분의 최애는?")</p>
+                                    </div>
+                                    <div class="border-t border-slate-100 pt-3">
+                                        <span class="text-xs font-bold text-slate-800 block mb-1">해시태그 전략</span>
+                                        <p class="text-sm text-slate-600 mb-2">검색용 난사 자제. 브랜드/커뮤니티 위주 평균 4개.</p>
+                                        <div class="flex gap-1.5 flex-wrap"><span
+                                                class="text-xs bg-slate-100 px-2 py-1 rounded">#브랜드명</span><span
+                                                class="text-xs bg-slate-100 px-2 py-1 rounded">#미니멀라이프</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                                <span class="data-label">소통 방식 & 커뮤니티</span>
+                                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mt-2">
+                                    <ul class="text-sm text-indigo-900 space-y-2">
+                                        <li><strong class="text-indigo-700">팔로워 소통 유도:</strong> 스토리 스티커(투표/질문)를 활용한 데일리
+                                            양방향 소통.</li>
+                                        <li><strong class="text-indigo-700">커뮤니티 형성:</strong> 진정성 있는 장문 대댓글 100% 작성 원칙으로
+                                            폐쇄적인 진성 팬덤 구축.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="single-pane-strategy" class="space-y-6 hidden">
+                        <h2 class="section-headline">종합 리포트 (전략 및 실행 권고)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-indigo-600">콘텐츠 전략</span>
+                                <ul class="text-sm text-slate-700 space-y-1.5 list-disc pl-4 mt-2">
+                                    <li>사진/릴스 믹스 7:3 유지</li>
+                                    <li>주 3회 규칙적인 포스팅 루틴</li>
+                                    <li>빈도(Frequency)보다 퀄리티(Tone)에 극도로 집착</li>
+                                </ul>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-indigo-600">브랜딩 차별화</span>
+                                <ul class="text-sm text-slate-700 space-y-1.5 list-disc pl-4 mt-2">
+                                    <li>비주얼 강도의 압도적 우위 확보</li>
+                                    <li>보이스 일관성(페르소나) 파괴 없음</li>
+                                    <li>차별화 포인트: '기능'이 아닌 '분위기' 판매</li>
+                                </ul>
+                            </div>
+                            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-indigo-600">성장 & 바이럴 전략</span>
+                                <ul class="text-sm text-slate-700 space-y-1.5 list-disc pl-4 mt-2">
+                                    <li>성장 동력: 저장(Save) 유도 감성 릴스</li>
+                                    <li>팔로워 확보: 팬들의 UGC 리그램</li>
+                                    <li>바이럴 요소: 고품질 트렌딩 오디오 탑승</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-slate-900 p-6 rounded-2xl shadow-lg border border-slate-800">
+                                <span class="text-white font-bold text-lg mb-4 block">SWOT 분석</span>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="bg-white/10 p-3 rounded-xl border border-white/5"><span
+                                            class="text-blue-400 font-bold block text-sm mb-1">S (강점)</span>
+                                        <ul class="text-xs text-slate-300 space-y-1 list-disc pl-3">
+                                            <li>독보적 비주얼 통일성</li>
+                                            <li>초고관여 진성 팬덤</li>
+                                            <li>높은 댓글/저장 비율</li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-white/10 p-3 rounded-xl border border-white/5"><span
+                                            class="text-red-400 font-bold block text-sm mb-1">W (약점)</span>
+                                        <ul class="text-xs text-slate-300 space-y-1 list-disc pl-3">
+                                            <li>정보 전달력 부족</li>
+                                            <li>피드의 단조로움 우려</li>
+                                            <li>신규 유입 후킹 약함</li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-white/10 p-3 rounded-xl border border-white/5"><span
+                                            class="text-green-400 font-bold block text-sm mb-1">O (기회)</span>
+                                        <ul class="text-xs text-slate-300 space-y-1 list-disc pl-3">
+                                            <li>미니멀리즘 트렌드 지속</li>
+                                            <li>릴스 감성 오디오 유행</li>
+                                            <li>오프라인 팝업 연계</li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-white/10 p-3 rounded-xl border border-white/5"><span
+                                            class="text-orange-400 font-bold block text-sm mb-1">T (위협)</span>
+                                        <ul class="text-xs text-slate-300 space-y-1 list-disc pl-3">
+                                            <li>유사 감성 카피캣 폭증</li>
+                                            <li>시각적 피로도 누적</li>
+                                            <li>알고리즘 변화 리스크</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-4">
+                                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                    <span class="data-label text-slate-800">벤치마킹 (배울 점)</span>
+                                    <ol class="text-sm text-slate-600 space-y-1.5 list-decimal pl-4 mt-2">
+                                        <li>텍스트 없는 고감도 갤러리 피드 유지 전략.</li>
+                                        <li>고객을 소비자가 아닌 '취향 공유 이웃'으로 대하는 화법.</li>
+                                        <li>즉시 적용 전술: 프로모션 시에도 스튜디오 컷 대신 일상 연출 컷 사용.</li>
+                                    </ol>
+                                </div>
+                                <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 flex-1">
+                                    <span class="data-label text-indigo-800">실행 권고 (Action Items)</span>
+                                    <div class="mt-3 space-y-4">
+                                        <div>
+                                            <span
+                                                class="inline-block bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-1">즉시
+                                                실행 (3 Actions)</span>
+                                            <ul class="text-xs text-indigo-900 space-y-1 list-disc pl-4">
+                                                <li>정보 전달용 텍스트 오버레이 이미지는 보관 처리.</li>
+                                                <li>캡션 첫 줄을 호기심 유도 '질문형'으로 전면 수정.</li>
+                                                <li>릴스 커버 이미지를 피드 톤과 맞게 별도 제작/적용.</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <span
+                                                class="inline-block bg-slate-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-1">3~6개월
+                                                중장기 방향</span>
+                                            <p class="text-xs text-slate-700">제품 단독 컷에서 벗어나, 제품을 사용하는 '공간의 분위기'를 담은
+                                                라이프스타일 릴스 비중을 50%까지 확대하여 도달률 한계 돌파.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mode-trend" class="hidden">
+
+                    <div
+                        class="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-xl border border-slate-200 shadow-sm inline-flex">
+                        <button onclick="switchSubTab('trend', 'summary')" id="sub-trend-summary"
+                            class="sub-tab-active px-5 py-2 rounded-lg text-sm transition-all">1. 종합 서머리</button>
+                        <button onclick="switchSubTab('trend', 'matrix')" id="sub-trend-matrix"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">2. 교차 매트릭스</button>
+                        <button onclick="switchSubTab('trend', 'moodboard')" id="sub-trend-moodboard"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">3. 비주얼 무드보드</button>
+                        <button onclick="switchSubTab('trend', 'risk')" id="sub-trend-risk"
+                            class="sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all">4. 한계 & 실행 전략</button>
+                    </div>
+
+                    <div id="trend-pane-summary" class="space-y-6 block">
+                        <h2 class="section-headline">탐색 (Discovery) 및 종합 요약</h2>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+                            <div
+                                class="lg:col-span-3 bg-gradient-to-br from-indigo-900 to-slate-900 p-8 rounded-2xl text-white shadow-lg relative overflow-hidden flex flex-col justify-center">
+                                <span
+                                    class="bg-indigo-500/30 text-indigo-200 text-xs px-2 py-1 rounded font-bold tracking-wider mb-4 inline-block w-max">Synthesis
+                                    Summary</span>
+                                <h3 class="text-2xl font-bold mb-3">질문에 대한 핵심 답변 (종합 요약)</h3>
+                                <p class="text-indigo-100 leading-relaxed text-sm md:text-base max-w-3xl">"최근 성공적인 계정들은
+                                    '정보 전달'보다 '분위기 압도'를 선택했습니다. 시각적으로는 텍스트를 배제한 고감도 무드를 유지하며, 캡션과 댓글을 통해 배타적인 '찐팬' 마이크로
+                                    커뮤니티를 형성하는 것이 현재 가장 강력한 벤치마킹 전략입니다."</p>
+                            </div>
+                            <div
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                                <span class="data-label mb-2 border-b border-slate-100 pb-2">분석 범위 & 타겟</span>
+                                <div class="space-y-3 mt-2">
+                                    <div><span
+                                            class="block text-[10px] text-slate-500 font-bold uppercase">페르소나</span><span
+                                            class="text-sm font-bold text-slate-800">2030 고관여 취향 소비층</span></div>
+                                    <div>
+                                        <span class="block text-[10px] text-slate-500 font-bold uppercase mb-1">핵심 분석 기준
+                                            (3가지)</span>
+                                        <ul class="text-xs text-slate-700 list-disc pl-3 space-y-0.5">
+                                            <li>비주얼 일관성(필터/구도)</li>
+                                            <li>마이크로 소통 방식</li>
+                                            <li>오디오/숏폼 활용도</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label mb-3">추천 관련 계정 (10~15개 병합)</span>
+                                <ul class="text-sm space-y-2.5 text-slate-700">
+                                    <li class="font-bold text-indigo-600 flex justify-between bg-indigo-50 p-2 rounded">
+                                        <span>@brand_a</span> <span>45K</span></li>
+                                    <li class="font-bold text-slate-800 flex justify-between px-2">
+                                        <span>@creator_b</span> <span>120K</span></li>
+                                    <li class="font-bold text-slate-800 flex justify-between px-2"><span>@shop_c</span>
+                                        <span>88K</span></li>
+                                    <li class="flex justify-between text-slate-500 px-2"><span>@studio_d</span>
+                                        <span>22K</span></li>
+                                    <li class="text-xs text-center text-slate-400 pt-2 border-t border-slate-100 mt-2">+
+                                        외 11개 탑티어 계정 데이터 병합 분석 완료</li>
+                                </ul>
+                            </div>
+
+                            <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label mb-4 border-b border-slate-100 pb-2">🔥 핵심 공통 패턴 (Top 5)</span>
+                                <ul class="space-y-4">
+                                    <li class="flex gap-3"><span
+                                            class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                                        <div><strong class="text-sm block">오디오-퍼스트 릴스:</strong> <span
+                                                class="text-xs text-slate-600">트렌딩 음원 대신 ASMR/Lo-fi 비트로 '분위기' 설계.</span>
+                                        </div>
+                                    </li>
+                                    <li class="flex gap-3"><span
+                                            class="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                                        <div><strong class="text-sm block">의도된 불완전함:</strong> <span
+                                                class="text-xs text-slate-600">완벽한 스튜디오 컷보다 거울 셀카, 무심한 스냅샷의 반응률
+                                                고조.</span></div>
+                                    </li>
+                                    <li class="flex gap-3"><span
+                                            class="w-6 h-6 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</span>
+                                        <div><strong class="text-sm block">카루셀 스토리텔링:</strong> <span
+                                                class="text-xs text-slate-600">단순 나열이 아닌 기승전결(표지-과정-결과)을 갖춘 매거진
+                                                포맷.</span></div>
+                                    </li>
+                                    <li class="flex gap-3"><span
+                                            class="w-6 h-6 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xs font-bold shrink-0">4</span>
+                                        <div><strong class="text-sm block">댓글 유도 게이미피케이션:</strong> <span
+                                                class="text-xs text-slate-600">"가장 마음에 드는 번호는?" 등 참여 허들이 낮은 객관식 질문
+                                                사용.</span></div>
+                                    </li>
+                                    <li class="flex gap-3"><span
+                                            class="w-6 h-6 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xs font-bold shrink-0">5</span>
+                                        <div><strong class="text-sm block">프로필 링크 통합:</strong> <span
+                                                class="text-xs text-slate-600">복잡한 웹사이트 대신 링크트리형 페이지로 트래픽 집중.</span>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="trend-pane-matrix" class="space-y-6 hidden">
+                        <h2 class="section-headline">심층 분석 데이터 & 교차 매트릭스</h2>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-center mb-4">비주얼 톤 분포 (15개 계정 평균)</span>
+                                <div class="h-64"><canvas id="toneChart"></canvas></div>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-center mb-4">콘텐츠 포맷 점유율</span>
+                                <div class="h-64"><canvas id="formatChart"></canvas></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                                <span class="data-label">주요 계정 교차 분석 테이블</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm text-slate-600">
+                                    <thead
+                                        class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-6 py-4">계정명</th>
+                                            <th class="px-6 py-4">메인 톤</th>
+                                            <th class="px-6 py-4">텍스트 오버레이</th>
+                                            <th class="px-6 py-4">주력 포맷</th>
+                                            <th class="px-6 py-4">아이덴티티 강도</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-6 py-4 font-bold text-slate-900">@brand_a</td>
+                                            <td class="px-6 py-4"><span
+                                                    class="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs">웜톤</span>
+                                            </td>
+                                            <td class="px-6 py-4">미사용</td>
+                                            <td class="px-6 py-4">카루셀 (60%)</td>
+                                            <td class="px-6 py-4">
+                                                <div class="w-24 bg-slate-200 h-2 rounded">
+                                                    <div class="bg-indigo-600 h-2 rounded" style="width: 90%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-6 py-4 font-bold text-slate-900">@creator_b</td>
+                                            <td class="px-6 py-4"><span
+                                                    class="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs">쿨/모노크롬</span>
+                                            </td>
+                                            <td class="px-6 py-4">표지 극소수</td>
+                                            <td class="px-6 py-4">릴스 (80%)</td>
+                                            <td class="px-6 py-4">
+                                                <div class="w-24 bg-slate-200 h-2 rounded">
+                                                    <div class="bg-indigo-600 h-2 rounded" style="width: 85%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-6 py-4 font-bold text-slate-900">@shop_c</td>
+                                            <td class="px-6 py-4"><span
+                                                    class="px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs">웜/저채도</span>
+                                            </td>
+                                            <td class="px-6 py-4">미사용</td>
+                                            <td class="px-6 py-4">단일 (50%)</td>
+                                            <td class="px-6 py-4">
+                                                <div class="w-24 bg-slate-200 h-2 rounded">
+                                                    <div class="bg-indigo-600 h-2 rounded" style="width: 70%"></div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="trend-pane-moodboard" class="space-y-6 hidden">
+                        <h2 class="section-headline">시각적 & 화법 트렌드 분석</h2>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-indigo-500">
+                                <span class="data-label mb-4 text-indigo-700">비주얼 트렌드 공통점 (3개)</span>
+                                <ul class="text-sm text-slate-700 space-y-3">
+                                    <li><strong class="text-slate-900 block">1. 필름 카메라 질감 차용</strong> 완벽한 화질을 버리고
+                                        그레인/노이즈 효과 적용.</li>
+                                    <li><strong class="text-slate-900 block">2. 익스트림 클로즈업</strong> 전체 형태보다 소재의 텍스처, 빛의
+                                        반사에 집중.</li>
+                                    <li><strong class="text-slate-900 block">3. 텍스트 프리(Text-Free)</strong> 정보를 캡션으로 밀어내고
+                                        이미지 본연의 감도 유지.</li>
+                                </ul>
+                            </div>
+                            <div
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-teal-500">
+                                <span class="data-label mb-4 text-teal-700">캡션 & 화법 트렌드 공통점 (3개)</span>
+                                <ul class="text-sm text-slate-700 space-y-3">
+                                    <li><strong class="text-slate-900 block">1. 에세이형 긴 글</strong> 숏폼 시대의 반작용으로 철학을 담은 긴
+                                        호흡의 글 선호.</li>
+                                    <li><strong class="text-slate-900 block">2. 마이크로 커뮤니티 화법</strong> 대중이 아닌 '우리 단골'에게만
+                                        통하는 내부 언어 사용.</li>
+                                    <li><strong class="text-slate-900 block">3. 해시태그 숨기기</strong> 피드 하단 노출을 줄이고 미학적 깔끔함
+                                        추구.</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <span class="data-label mb-4">트렌드 레퍼런스 갤러리 (Masonry)</span>
+                            <div class="columns-2 md:columns-4 gap-4 space-y-4">
+                                <div class="break-inside-avoid relative group rounded-xl overflow-hidden">
+                                    <div class="h-48 w-full bg-slate-200"></div>
+                                    <div
+                                        class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <span
+                                            class="text-white text-xs font-bold border px-2 py-1 rounded-full">Text-free</span>
+                                    </div>
+                                </div>
+                                <div class="break-inside-avoid relative group rounded-xl overflow-hidden">
+                                    <div class="h-64 w-full bg-[#EADDCA]"></div>
+                                    <div
+                                        class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <span class="text-white text-xs font-bold border px-2 py-1 rounded-full">웜톤
+                                            필름</span></div>
+                                </div>
+                                <div class="break-inside-avoid relative group rounded-xl overflow-hidden">
+                                    <div class="h-40 w-full bg-slate-300"></div>
+                                    <div
+                                        class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <span
+                                            class="text-white text-xs font-bold border px-2 py-1 rounded-full">클로즈업</span>
+                                    </div>
+                                </div>
+                                <div class="break-inside-avoid relative group rounded-xl overflow-hidden">
+                                    <div class="h-56 w-full bg-[#8B7355]"></div>
+                                    <div
+                                        class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <span
+                                            class="text-white text-xs font-bold border px-2 py-1 rounded-full">자연광</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="trend-pane-risk" class="space-y-6 hidden">
+                        <h2 class="section-headline">인사이트 종합 & 실행 전략</h2>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                                <span class="data-label text-slate-800 mb-4">트렌드 자체의 SWOT</span>
+                                <div class="space-y-3">
+                                    <div class="flex gap-2"><span
+                                            class="w-6 h-6 bg-blue-100 text-blue-600 rounded flex items-center justify-center text-xs font-bold shrink-0">S</span><span
+                                            class="text-sm text-slate-700">충성도 & 고객생애가치(LTV) 극대화.</span></div>
+                                    <div class="flex gap-2"><span
+                                            class="w-6 h-6 bg-red-100 text-red-600 rounded flex items-center justify-center text-xs font-bold shrink-0">W</span><span
+                                            class="text-sm text-slate-700">직접적인 기능 소구가 어려워 신제품 런칭 시 답답함.</span></div>
+                                    <div class="flex gap-2"><span
+                                            class="w-6 h-6 bg-green-100 text-green-600 rounded flex items-center justify-center text-xs font-bold shrink-0">O</span><span
+                                            class="text-sm text-slate-700">알고리즘이 '체류시간'을 중시하며 릴스 노출 증가.</span></div>
+                                    <div class="flex gap-2"><span
+                                            class="w-6 h-6 bg-orange-100 text-orange-600 rounded flex items-center justify-center text-xs font-bold shrink-0">T</span><span
+                                            class="text-sm text-slate-700">제작 단가 상승 및 퀄리티 유지 리소스 소모.</span></div>
+                                </div>
+                            </div>
+
+                            <div class="bg-red-50 p-6 rounded-2xl border border-red-100 flex flex-col justify-center">
+                                <span class="data-label text-red-800 mb-2 flex items-center gap-1">⚠️ 분석 한계점 및 해석
+                                    주의사항</span>
+                                <p class="text-sm text-red-900 leading-relaxed mb-2">본 리서치는 인게이지먼트 상위 1% 계정을 중심으로 편향되어
+                                    있습니다. <strong>초기 브랜드가 이 트렌드(감성 위주)를 맹목적으로 복사할 경우 도달률(Reach) 확보에 실패</strong>할 수 있습니다.
+                                </p>
+                                <p class="text-sm text-red-900 leading-relaxed">정보성(퍼포먼스) 콘텐츠를 8:2 비율로 섞어 운영하는 듀얼 트랙 전략이
+                                    필요합니다.</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-indigo-900 p-8 rounded-2xl shadow-lg border border-slate-800 text-white">
+                            <span class="text-indigo-300 font-bold tracking-wider text-xs mb-4 block uppercase">즉시 실행 전략
+                                (Action Plan)</span>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-white/10 p-5 rounded-xl border border-white/20">
+                                    <span class="block text-lg mb-2">🗑️</span>
+                                    <span class="block font-bold text-white mb-2">액션 1. 시각적 디톡스</span>
+                                    <p class="text-xs text-indigo-100">피드 내 모든 홍보성 텍스트 뱃지를 삭제하고, 캡션 본문으로 정보 이동.</p>
+                                </div>
+                                <div class="bg-white/10 p-5 rounded-xl border border-white/20">
+                                    <span class="block text-lg mb-2">🎧</span>
+                                    <span class="block font-bold text-white mb-2">액션 2. Lo-fi 릴스</span>
+                                    <p class="text-xs text-indigo-100">자극적인 텍스트 없이, 공간의 백색소음만 담은 7초 릴스 주 1회 정규 편성.</p>
+                                </div>
+                                <div class="bg-white/10 p-5 rounded-xl border border-white/20">
+                                    <span class="block text-lg mb-2">🙋‍♂️</span>
+                                    <span class="block font-bold text-white mb-2">액션 3. 질문형 카루셀</span>
+                                    <p class="text-xs text-indigo-100">카루셀 마지막 장에 "A vs B 당신의 취향은?" 슬라이드 고정 삽입하여 댓글 유도.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 메인 탭 전환 (단일 계정 vs 트렌드 리서치)
+        function switchMainTab(mode) {
+            document.getElementById('main-tab-single').className = mode === 'single' ? 'main-tab-active pb-3 px-1 text-sm transition-all' : 'main-tab-inactive pb-3 px-1 text-sm transition-all';
+            document.getElementById('main-tab-trend').className = mode === 'trend' ? 'main-tab-active pb-3 px-1 text-sm transition-all' : 'main-tab-inactive pb-3 px-1 text-sm transition-all';
+
+            document.getElementById('mode-single').style.display = mode === 'single' ? 'block' : 'none';
+            document.getElementById('mode-trend').style.display = mode === 'trend' ? 'block' : 'none';
+
+            // 메인 탭 전환 시 첫 번째 서브 탭으로 초기화
+            if (mode === 'single') switchSubTab('single', 'overview');
+            if (mode === 'trend') switchSubTab('trend', 'summary');
+        }
+
+        // 서브 탭 전환
+        function switchSubTab(mode, tabName) {
+            const tabs = mode === 'single' ? ['overview', 'visual', 'caption', 'strategy'] : ['summary', 'matrix', 'moodboard', 'risk'];
+
+            tabs.forEach(t => {
+                const btn = document.getElementById(`sub-${mode}-${t}`);
+                const pane = document.getElementById(`${mode}-pane-${t}`);
+                if (btn && pane) {
+                    if (t === tabName) {
+                        btn.className = 'sub-tab-active px-5 py-2 rounded-lg text-sm transition-all';
+                        pane.style.display = 'block';
+                    } else {
+                        btn.className = 'sub-tab-inactive px-5 py-2 rounded-lg text-sm transition-all';
+                        pane.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // 차트 렌더링
+        document.addEventListener('DOMContentLoaded', function () {
+            // 톤 분포 차트
+            if (document.getElementById('toneChart')) {
+                const ctxTone = document.getElementById('toneChart').getContext('2d');
+                new Chart(ctxTone, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['웜/저채도', '쿨/모노크롬', '고채도 팝', '기타'],
+                        datasets: [{ data: [60, 25, 10, 5], backgroundColor: ['#d97706', '#64748b', '#ec4899', '#e2e8f0'], borderWidth: 0, hoverOffset: 4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } }, cutout: '70%' }
+                });
+            }
+
+            // 포맷 점유율 차트
+            if (document.getElementById('formatChart')) {
+                const ctxFormat = document.getElementById('formatChart').getContext('2d');
+                new Chart(ctxFormat, {
+                    type: 'bar',
+                    data: {
+                        labels: ['카루셀', '릴스', '단일사진'],
+                        datasets: [{ label: '포맷 비중 (%)', data: [50, 35, 15], backgroundColor: ['#4f46e5', '#14b8a6', '#cbd5e1'], borderRadius: 4 }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,575 @@
+"use client"
+import { useAnalysisStore } from "@/store/useAnalysisStore";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import Image from "next/image";
+
+// ────────────────────────────────────────────────────────────
+// 소형 재사용 컴포넌트
+// ────────────────────────────────────────────────────────────
+
+function StatPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="flex flex-col items-center px-4 py-2 rounded-lg bg-muted/60 min-w-[80px]">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-bold mt-0.5">{value}</span>
+    </div>
+  );
+}
+
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <p className={`text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 ${className || ""}`}>
+      {children}
+    </p>
+  );
+}
+
+function FieldRow({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <div className="grid grid-cols-[140px_1fr] gap-2 text-sm">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function ActionItem({ index, text }: { index: number; text: string }) {
+  return (
+    <li className="flex gap-3 items-start">
+      <span className="flex-shrink-0 flex h-5 w-5 rounded-full bg-primary/15 text-primary items-center justify-center text-[11px] font-bold mt-0.5">
+        {index}
+      </span>
+      <span className="text-sm leading-relaxed">{text}</span>
+    </li>
+  );
+}
+
+function SwotCell({
+  title,
+  items,
+  color,
+}: {
+  title: string;
+  items?: string[];
+  color: string;
+}) {
+  return (
+    <div className={`p-5 rounded-2xl border ${color} shadow-sm backdrop-blur-sm transition-transform hover:-translate-y-1 duration-300`}>
+      <p className="text-xs font-bold uppercase tracking-wider mb-3 opacity-80">{title}</p>
+      <ul className="space-y-2">
+        {items?.map((s, i) => (
+          <li key={i} className="text-sm flex gap-2 items-start font-medium">
+            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-60 shadow-sm" />
+            {s}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RatioBar({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{value}%</span>
+      </div>
+      <Progress value={value} className="h-1.5" />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// 메인 컴포넌트
+// ────────────────────────────────────────────────────────────
+
+export default function ReportCard() {
+  const { currentReport, error, isAnalyzing } = useAnalysisStore();
+
+  if (isAnalyzing) {
+    return (
+      <div className="mt-8 space-y-6 animate-pulse">
+        <div className="h-24 bg-muted/60 rounded-xl w-full" />
+        <div className="space-y-3">
+          <div className="h-4 bg-muted/60 rounded w-1/3" />
+          <div className="h-4 bg-muted/60 rounded w-1/2" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="h-32 bg-muted/60 rounded-xl" />
+          <div className="h-32 bg-muted/60 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="mt-8 border-destructive bg-destructive/5">
+        <CardHeader><CardTitle className="text-destructive">분석 실패</CardTitle></CardHeader>
+        <CardContent><p className="text-sm text-destructive/80">{error}</p></CardContent>
+      </Card>
+    );
+  }
+
+  if (!currentReport) return null;
+
+  const { profile, visual_analysis: v, caption_analysis: c } = currentReport;
+  const r = currentReport.report ?? {};
+
+  if (!profile) return null;
+
+  const va = v ?? {};
+  const ca = c ?? {};
+
+  return (
+    <div className="w-full mt-10 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+      {/* ── 프로필 헤더 ── */}
+      <div className="flex flex-wrap items-center gap-4 p-5 rounded-xl border bg-card shadow-sm">
+        <div className="relative w-16 h-16 shrink-0">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl border">
+            {profile.username?.charAt(0).toUpperCase()}
+          </div>
+          {profile.profile_image_url && (
+            <img
+              src={profile.profile_image_url}
+              alt="Profile"
+              className="absolute inset-0 w-16 h-16 rounded-full object-cover border bg-card"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              referrerPolicy="no-referrer"
+            />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-bold truncate tracking-tight">@{profile.username}</h2>
+          {profile.full_name && (
+            <p className="text-sm text-muted-foreground">{profile.full_name}</p>
+          )}
+          {profile.bio && (
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{profile.bio}</p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatPill label="게시물" value={profile.posts_count?.toLocaleString() ?? '-'} />
+          <StatPill label="팔로워" value={profile.followers_count?.toLocaleString() ?? '-'} />
+          <StatPill label="팔로잉" value={profile.following_count?.toLocaleString() ?? '-'} />
+          {currentReport.posts?.length > 0 && (
+            <>
+              <StatPill
+                label="평균 좋아요"
+                value={Math.round(
+                  currentReport.posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) /
+                    currentReport.posts.length
+                ).toLocaleString()}
+              />
+              <StatPill
+                label="평균 댓글"
+                value={Math.round(
+                  currentReport.posts.reduce((a: number, p: any) => a + (p.comments_count ?? 0), 0) /
+                    currentReport.posts.length
+                ).toLocaleString()}
+              />
+            </>
+          )}
+          {va.visual_identity?.score != null && (
+            <StatPill label="비주얼 일관성" value={`${va.visual_identity.score}/10`} />
+          )}
+        </div>
+      </div>
+
+      {/* ── 탭 ── */}
+      <Tabs defaultValue="summary" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 h-12 p-1 bg-muted/50 rounded-2xl border border-border/50 backdrop-blur-sm">
+          <TabsTrigger value="summary" className="text-sm rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all duration-300">📊 종합</TabsTrigger>
+          <TabsTrigger value="visuals" className="text-sm rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all duration-300">📸 비주얼</TabsTrigger>
+          <TabsTrigger value="captions" className="text-sm rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all duration-300">✍️ 캡션</TabsTrigger>
+          <TabsTrigger value="tactics" className="text-sm rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-md transition-all duration-300">🎯 전략</TabsTrigger>
+        </TabsList>
+
+        {/* ────── 종합 탭 ────── */}
+        <TabsContent value="summary" className="mt-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 auto-rows-min">
+
+            {/* AI 요약: Span 8 */}
+            {r.summary && (
+              <div className="col-span-1 md:col-span-8 p-6 sm:p-8 rounded-[2rem] border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background relative overflow-hidden group shadow-xl">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[80px] rounded-full pointer-events-none -mt-20 -mr-20 group-hover:bg-primary/30 transition-colors duration-700" />
+                <div className="relative z-10">
+                  <SectionLabel className="mb-4 text-primary font-bold text-lg tracking-tight">AI 핵심 요약</SectionLabel>
+                  <p className="text-base sm:text-lg leading-relaxed text-foreground/90 font-medium">{r.summary}</p>
+                </div>
+              </div>
+            )}
+
+            {/* 비주얼 일관성 (Quick Score) : Span 4 */}
+            {va.visual_identity?.score != null && (
+              <div className="col-span-1 md:col-span-4 p-6 sm:p-8 rounded-[2rem] border border-border/50 bg-card/60 backdrop-blur-md shadow-lg flex flex-col items-center justify-center text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-primary/5 pointer-events-none" />
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">비주얼 응집도</h3>
+                <div className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60 drop-shadow-sm">
+                  {va.visual_identity.score}
+                </div>
+                <div className="mt-4 w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${va.visual_identity.score * 10}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* SWOT (Span 12, inner grid) */}
+            <div className="col-span-1 md:col-span-12 p-6 sm:p-8 rounded-[2rem] border border-border/50 bg-card shadow-lg">
+              <h3 className="text-xl font-bold tracking-tight mb-6 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-sm">💡</span>
+                SWOT 분석
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <SwotCell title="강점 (STRENGTHS)" items={r.swot?.strengths} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" />
+                <SwotCell title="약점 (WEAKNESSES)" items={r.swot?.weaknesses} color="bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400" />
+                <SwotCell title="기회 (OPPORTUNITIES)" items={r.swot?.opportunities} color="bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400" />
+                <SwotCell title="위협 (THREATS)" items={r.swot?.threats} color="bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400" />
+              </div>
+            </div>
+
+            {/* 전략 (Span 4 each) */}
+            <div className="col-span-1 md:col-span-4 p-6 rounded-3xl border border-border/50 bg-card/40 hover:bg-card/80 transition-colors shadow-sm">
+              <h4 className="text-sm font-bold text-muted-foreground tracking-wider mb-4 uppercase">Content Strategy</h4>
+              <div className="space-y-4">
+                <FieldRow label="콘텐츠 믹스" value={r.content_strategy?.mix} />
+                <FieldRow label="포스팅 루틴" value={r.content_strategy?.routine} />
+                <FieldRow label="양 vs 질" value={r.content_strategy?.balance} />
+              </div>
+            </div>
+
+            <div className="col-span-1 md:col-span-4 p-6 rounded-3xl border border-border/50 bg-card/40 hover:bg-card/80 transition-colors shadow-sm">
+              <h4 className="text-sm font-bold text-muted-foreground tracking-wider mb-4 uppercase">Branding</h4>
+              <div className="space-y-4">
+                <FieldRow label="비주얼 강도" value={r.branding?.visual_strength} />
+                <FieldRow label="보이스 일관성" value={r.branding?.voice_consistency} />
+                <FieldRow label="차별화 포인트" value={r.branding?.differentiation} />
+              </div>
+            </div>
+
+            <div className="col-span-1 md:col-span-4 p-6 rounded-3xl border border-border/50 bg-card/40 hover:bg-card/80 transition-colors shadow-sm">
+              <h4 className="text-sm font-bold text-muted-foreground tracking-wider mb-4 uppercase">Growth Engine</h4>
+              <div className="space-y-4">
+                <FieldRow label="성장 엔진" value={r.growth_strategy?.engine} />
+                <FieldRow label="팔로워 전략" value={r.growth_strategy?.tactics} />
+                <FieldRow label="바이럴 요소" value={r.growth_strategy?.viral_factors} />
+              </div>
+            </div>
+
+          </div>
+        </TabsContent>
+
+        {/* ────── 비주얼 탭 ────── */}
+        <TabsContent value="visuals" className="mt-8 space-y-6">
+
+          {/* 아이덴티티 점수 + 요약 */}
+          <div className="p-6 sm:p-8 rounded-[2rem] border border-border/50 bg-card/60 backdrop-blur-md shadow-lg relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-32 h-32 bg-primary/10 blur-[60px] rounded-full pointer-events-none -mt-10 -ml-10" />
+            <div className="flex flex-col sm:flex-row gap-6 justify-between items-start sm:items-center relative z-10">
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold tracking-tight">비주얼 아이덴티티</h3>
+                {va.summary && <p className="text-sm text-foreground/80 leading-relaxed max-w-2xl">{va.summary}</p>}
+                {va.visual_identity?.recognizability && (
+                  <p className="text-xs text-muted-foreground border-l-2 border-primary/50 pl-3 mt-2">
+                    {va.visual_identity.recognizability}
+                  </p>
+                )}
+              </div>
+
+              <div className="shrink-0 text-center">
+                <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-primary to-primary/60">
+                  {va.visual_identity?.score ?? '-'}<span className="text-xl text-muted-foreground font-normal">/10</span>
+                </div>
+              </div>
+            </div>
+            {va.visual_identity?.score != null && (
+              <Progress value={va.visual_identity.score * 10} className="h-1.5 mt-6 bg-muted/50" />
+            )}
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+
+            {/* 피드 톤 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">피드 톤 & 색감</CardTitle></CardHeader>
+              <CardContent className="space-y-2.5 text-sm">
+                <FieldRow label="색감 팔레트" value={va.feed_tone?.palette} />
+                <Separator />
+                <FieldRow label="채도" value={va.feed_tone?.saturation} />
+                <Separator />
+                <FieldRow label="밝기" value={va.feed_tone?.brightness} />
+                <Separator />
+                <FieldRow label="필터 일관성" value={va.feed_tone?.filter_consistency} />
+              </CardContent>
+            </Card>
+
+            {/* 콘텐츠 유형 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">콘텐츠 유형</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {va.content_types?.primary_subjects?.length > 0 && (
+                  <div>
+                    <SectionLabel>주요 피사체</SectionLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {va.content_types.primary_subjects.map((s: string, i: number) => (
+                        <Badge key={i} variant="secondary">{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <Separator />
+                <FieldRow label="인물 등장" value={va.content_types?.person_frequency} />
+                <Separator />
+                <FieldRow label="제품 촬영" value={va.content_types?.product_style} />
+              </CardContent>
+            </Card>
+
+            {/* 구도 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">구도 & 레이아웃</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {va.composition?.dominant_patterns?.length > 0 && (
+                  <div>
+                    <SectionLabel>주요 구도 패턴</SectionLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {va.composition.dominant_patterns.map((p: string, i: number) => (
+                        <Badge key={i} variant="outline">{p}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <Separator />
+                <FieldRow label="여백 활용" value={va.composition?.whitespace} />
+                <Separator />
+                <FieldRow label="텍스트 오버레이" value={va.composition?.text_overlay} />
+              </CardContent>
+            </Card>
+
+            {/* 그리드 전략 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">그리드 전략</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">그리드 패턴</span>
+                  <Badge variant={va.grid_strategy?.has_pattern ? "default" : "secondary"}>
+                    {va.grid_strategy?.has_pattern ? "있음" : "없음"}
+                  </Badge>
+                </div>
+                {va.grid_strategy?.pattern_description && (
+                  <>
+                    <Separator />
+                    <p className="text-xs text-muted-foreground">{va.grid_strategy.pattern_description}</p>
+                  </>
+                )}
+                {va.grid_strategy?.content_ratio && (
+                  <>
+                    <Separator />
+                    <SectionLabel>콘텐츠 포맷 비율</SectionLabel>
+                    <div className="space-y-2">
+                      <RatioBar label="단일 이미지" value={va.grid_strategy.content_ratio.single_image ?? 0} />
+                      <RatioBar label="카루셀" value={va.grid_strategy.content_ratio.carousel ?? 0} />
+                      <RatioBar label="릴스" value={va.grid_strategy.content_ratio.reels ?? 0} />
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ────── 캡션 탭 ────── */}
+        <TabsContent value="captions" className="mt-4 space-y-4">
+
+          {/* 요약 */}
+          {ca.summary && (
+            <div className="p-4 rounded-xl border-l-4 border-violet-400 bg-violet-50 dark:bg-violet-950/20">
+              <SectionLabel>캡션 종합 진단</SectionLabel>
+              <p className="text-sm leading-relaxed">{ca.summary}</p>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-2 gap-4">
+
+            {/* 톤앤매너 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">톤 & 매너</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <FieldRow label="화법 스타일" value={ca.tone_manner?.speech_style} />
+                {ca.tone_manner?.emotional_keywords?.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <SectionLabel>감성 키워드</SectionLabel>
+                      <div className="flex flex-wrap gap-1.5">
+                        {ca.tone_manner.emotional_keywords.map((k: string, i: number) => (
+                          <Badge key={i} variant="secondary">{k}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                <Separator />
+                <FieldRow label="이모지 빈도" value={ca.tone_manner?.emoji?.frequency} />
+                {ca.tone_manner?.emoji?.types?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {ca.tone_manner.emoji.types.map((e: string, i: number) => (
+                      <span key={i} className="text-base">{e}</span>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 캡션 전략 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">캡션 작성 전략</CardTitle></CardHeader>
+              <CardContent className="space-y-2.5 text-sm">
+                <FieldRow label="훅(Hook) 전략" value={ca.caption_strategy?.hook_style} />
+                <Separator />
+                <FieldRow label="CTA 패턴" value={ca.caption_strategy?.cta_pattern} />
+                <Separator />
+                <FieldRow label="포맷 스타일" value={ca.caption_strategy?.formatting} />
+              </CardContent>
+            </Card>
+
+            {/* 콘텐츠 카테고리 */}
+            {ca.content_categories?.categories?.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">콘텐츠 카테고리 비중</CardTitle></CardHeader>
+                <CardContent className="space-y-2.5">
+                  {ca.content_categories.categories.map((cat: { name: string; percentage: number }, i: number) => (
+                    <RatioBar key={i} label={cat.name} value={cat.percentage} />
+                  ))}
+                  {ca.content_categories.top_themes?.length > 0 && (
+                    <>
+                      <Separator />
+                      <div>
+                        <SectionLabel>주력 테마 TOP 3</SectionLabel>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ca.content_categories.top_themes.map((t: string, i: number) => (
+                            <Badge key={i} variant="default">{t}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 해시태그 + 소통 */}
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">해시태그 & 소통</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {ca.hashtag_strategy?.types?.length > 0 && (
+                  <div>
+                    <SectionLabel>해시태그 유형</SectionLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ca.hashtag_strategy.types.map((t: string, i: number) => (
+                        <Badge key={i} variant="outline">{t}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {ca.hashtag_strategy?.examples?.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
+                      {ca.hashtag_strategy.examples.map((e: string, i: number) => (
+                        <span key={i}>{e.startsWith('#') ? e : `#${e}`}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {ca.engagement_style?.interaction_methods?.length > 0 && (
+                  <>
+                    <Separator />
+                    <div>
+                      <SectionLabel>소통 유도 방식</SectionLabel>
+                      <div className="flex flex-wrap gap-1.5">
+                        {ca.engagement_style.interaction_methods.map((m: string, i: number) => (
+                          <Badge key={i} variant="secondary">{m}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {ca.engagement_style?.community_building && (
+                  <>
+                    <Separator />
+                    <FieldRow label="커뮤니티 전략" value={ca.engagement_style.community_building} />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ────── 전략 탭 ────── */}
+        <TabsContent value="tactics" className="mt-4 space-y-4">
+
+          {/* 벤치마킹 */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">벤치마킹 인사이트</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {r.benchmarking?.top_learnings?.length > 0 && (
+                <div>
+                  <SectionLabel>핵심 인사이트</SectionLabel>
+                  <ul className="space-y-2">
+                    {r.benchmarking.top_learnings.map((l: string, i: number) => (
+                      <ActionItem key={i} index={i + 1} text={l} />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {r.benchmarking?.actionable_tactics && (
+                <>
+                  <Separator />
+                  <div>
+                    <SectionLabel>즉시 벤치마킹 가능한 전술</SectionLabel>
+                    <p className="text-sm leading-relaxed">{r.benchmarking.actionable_tactics}</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 즉시 액션 아이템 */}
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">🚀 즉시 실행 액션</CardTitle></CardHeader>
+            <CardContent>
+              <ul className="space-y-3">
+                {r.recommendations?.immediate?.map((t: string, idx: number) => (
+                  <ActionItem key={idx} index={idx + 1} text={t} />
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          {/* 중장기 전략 */}
+          {r.recommendations?.long_term && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">📅 중장기 전략 방향</CardTitle></CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed">{r.recommendations.long_term}</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
