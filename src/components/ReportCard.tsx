@@ -10,12 +10,14 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
 } from "chart.js";
 import { Doughnut, Radar, Bar } from "react-chartjs-2";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 
-ChartJS.register(ArcElement, RadialLinearScale, PointElement, LineElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(ArcElement, RadialLinearScale, PointElement, LineElement, CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
 
 type Tab = "overview" | "visual" | "caption" | "strategy";
 
@@ -89,15 +91,27 @@ function SubTabBtn({ active, onClick, children }: { active: boolean; onClick: ()
 function PaletteSwatch({ palette }: { palette: string }) {
   const colors = getPaletteColors(palette);
   return (
-    <div className="flex items-center mt-2">
-      {colors.map((c, i) => (
-        <div
-          key={i}
-          className="w-10 h-10 rounded-full border-2 border-white shadow-md shrink-0"
-          style={{ background: c, marginLeft: i > 0 ? "-10px" : "0", zIndex: colors.length - i }}
-        />
-      ))}
-      <span className="ml-4 text-base font-black text-slate-700">{palette}</span>
+    <div className="flex flex-col gap-3 mt-2">
+      <Badge variant="secondary" className="w-fit bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 border-none">
+        {palette}
+      </Badge>
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          {colors.map((c, i) => (
+            <Tooltip key={i}>
+              <TooltipTrigger>
+                <div
+                  className="w-10 h-10 rounded-full shadow-md shrink-0 cursor-pointer border-2 border-white/80 hover:scale-110 transition-transform duration-200"
+                  style={{ background: c }}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-slate-900 text-white font-mono text-xs">
+                Hex: {c}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </TooltipProvider>
+      </div>
     </div>
   );
 }
@@ -438,12 +452,18 @@ function VisualPane({ v }: { v: any }) {
     <div className="space-y-14 pb-20">
       <MagazineHeader num="02" sub="Visual Analysis" title="비주얼 정체성 분석" />
 
-      {v.summary && (
-        <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200">
-          <DataLabel>비주얼 종합 진단</DataLabel>
-          <p className="text-base text-slate-700 leading-relaxed">{v.summary}</p>
-        </div>
-      )}
+      {v.summary && (() => {
+        const parts = v.summary.split(/[.。]/);
+        const headline = parts[0];
+        const rest = parts.slice(1).join('.').trim();
+        return (
+          <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200">
+            <DataLabel>비주얼 종합 진단</DataLabel>
+            <p className="text-2xl md:text-3xl font-black text-slate-900 mb-4 leading-tight">{headline}{headline && "."}</p>
+            {rest && <p className="text-base text-slate-600 leading-relaxed">{rest}</p>}
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* 피드 톤 */}
@@ -472,7 +492,6 @@ function VisualPane({ v }: { v: any }) {
         {/* 콘텐츠 유형 */}
         <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-teal-500">
           <InfoHeadline>콘텐츠 유형</InfoHeadline>
-          {/* 포맷 비율 대형 숫자 */}
           {(singlePct > 0 || carouselPct > 0 || reelsPct > 0) && (
             <div className="grid grid-cols-3 gap-3 mb-8">
               {[
@@ -491,11 +510,11 @@ function VisualPane({ v }: { v: any }) {
             {v.content_types?.primary_subjects?.length > 0 && (
               <div>
                 <DataLabel>주요 피사체</DataLabel>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   {v.content_types.primary_subjects.map((s: string, i: number) => (
-                    <span key={i} className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">
+                    <Badge key={i} variant="outline" className={`px-3 py-1.5 border-slate-200 text-slate-700 shadow-sm ${i % 2 === 0 ? 'text-sm font-black' : 'text-xs font-bold'}`}>
                       {s}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -521,9 +540,10 @@ function VisualPane({ v }: { v: any }) {
         <InfoHeadline>구도 & 레이아웃</InfoHeadline>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
           <div className="flex flex-col items-center gap-4">
-            <div className="aspect-square bg-slate-900 rounded-2xl p-3 grid grid-cols-3 gap-1.5 shadow-xl w-full max-w-[200px] relative">
+            {/* 세련된 와이어프레임으로 교체 */}
+            <div className="aspect-square bg-white rounded-2xl p-3 grid grid-cols-3 gap-1.5 border border-slate-200 shadow-sm w-full max-w-[200px] relative">
               {Array.from({ length: 9 }).map((_, i) => (
-                <div key={i} className={`rounded-md ${i === 4 ? "bg-indigo-500 shadow-lg shadow-indigo-500/50" : "bg-slate-800"}`} />
+                <div key={i} className={`border border-slate-200 rounded-md ${i === 4 ? "bg-indigo-50 border-indigo-200" : "bg-white"}`} />
               ))}
               {v.composition?.whitespace && (
                 <div className="absolute -top-3 -right-3 bg-indigo-600 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full shadow-lg whitespace-nowrap">
