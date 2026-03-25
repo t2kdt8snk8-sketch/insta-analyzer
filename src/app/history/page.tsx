@@ -80,7 +80,7 @@ const TREND_COLS: TrendColDef[] = [
   { key: "query",     label: "질문 내용",    width: "240px", get: i => i.username.replace("[트렌드] ", "") },
   { key: "analyzed_at", label: "분석일시",   width: "130px", get: i => i.analyzed_at },
   { key: "acc_count", label: "분석 계정 수", width: "100px", get: i => i.data?.trend_accounts?.length ?? null },
-  { key: "pattern1",  label: "핵심 패턴",    width: "280px", get: i => i.data?.report?.keyPatterns?.[0] ?? null },
+  { key: "pattern1",  label: "핵심 패턴",    width: "280px", get: i => i.data?.report?.keyPatterns?.[0]?.pattern ?? null },
   { key: "summary",   label: "AI 요약",      width: "300px", get: i => i.data?.report?.summary ?? null },
 ];
 

@@ -165,6 +165,21 @@ export async function scrapeProfileAndPosts(
       timeout: 20_000,
     });
 
+    // 존재하지 않는 계정 또는 로그인 리다이렉트 감지
+    const finalUrl = page.url();
+    if (finalUrl.includes('accounts/login') || finalUrl.includes('accounts/suspended')) {
+      throw new Error(`세션 만료 또는 계정 정지: ${finalUrl}`);
+    }
+    const pageText = await page.evaluate(() => document.body?.innerText ?? '');
+    const NOT_FOUND_MARKERS = [
+      "Sorry, this page isn't available",
+      "이 페이지를 사용할 수 없습니다",
+      "The link you followed may be broken",
+    ];
+    if (NOT_FOUND_MARKERS.some(m => pageText.includes(m))) {
+      throw new Error(`계정 없음 또는 비공개: @${username}`);
+    }
+
     const [profileApiData, timelineApiData] = await Promise.all([
       profileApiPromise,
       timelineApiPromise,
@@ -173,6 +188,11 @@ export async function scrapeProfileAndPosts(
     if (profileApiData?.data?.user) {
       const user = profileApiData.data.user;
 
+      const profileImageUrl = user.hd_profile_pic_url_info?.url ?? user.profile_pic_url ?? '';
+      const [profileImageData] = profileImageUrl
+        ? await downloadImagesViaPlaywright(page, [profileImageUrl], 1)
+        : [undefined];
+
       const profile: ScrapedProfile = {
         username,
         full_name: user.full_name ?? '',
@@ -180,7 +200,8 @@ export async function scrapeProfileAndPosts(
         followers_count: user.follower_count ?? 0,
         following_count: user.following_count ?? 0,
         posts_count: user.media_count ?? 0,
-        profile_image_url: user.hd_profile_pic_url_info?.url ?? user.profile_pic_url ?? '',
+        profile_image_url: profileImageUrl,
+        profile_image_data: profileImageData,
         is_verified: user.is_verified ?? false,
       };
 

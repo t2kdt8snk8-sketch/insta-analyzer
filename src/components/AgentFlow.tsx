@@ -22,6 +22,7 @@ export default function AgentFlow() {
     analyzedData,
     failedAccounts,
     finalReport,
+    metaInfo,
     setPrompt,
     setUserContext,
     startDiscovery,
@@ -71,13 +72,14 @@ export default function AgentFlow() {
       )}
 
       {/* Loading States */}
-      {(currentStep === 'discovering' || currentStep === 'analyzing' || currentStep === 'synthesizing') && (
+      {(currentStep === 'discovering' || currentStep === 'verifying' || currentStep === 'analyzing' || currentStep === 'synthesizing') && (
         <Card className="rounded-xl border-slate-200 shadow-sm overflow-hidden">
           <CardContent className="pt-10 pb-12 space-y-6 text-center">
              <div className="flex flex-col items-center gap-4">
                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
                <h3 className="text-lg font-black text-slate-900 tracking-tight">
                   {currentStep === 'discovering' && "AI가 관련 트렌드와 페르소나를 탐색 중입니다..."}
+                  {currentStep === 'verifying' && "계정 존재 여부를 확인하는 중..."}
                   {currentStep === 'analyzing' && `${currentAnalyzingAccount || '계정'} 심층 분석 중...`}
                   {currentStep === 'synthesizing' && "종합 트렌드 리포트를 작성하는 중..."}
                </h3>
@@ -161,7 +163,7 @@ export default function AgentFlow() {
       {/* Step 3: Final Report */}
       {currentStep === 'done' && finalReport && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <AgentReportCard report={finalReport} analyzedData={analyzedData} failedAccounts={failedAccounts} />
+           <AgentReportCard report={finalReport} analyzedData={analyzedData} failedAccounts={failedAccounts} metaInfo={metaInfo} />
            <Button variant="outline" className="w-full" onClick={reset}>새로운 분석 시작하기</Button>
         </div>
       )}

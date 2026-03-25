@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { AgentReport } from '@/lib/scraper/types';
 import { useAnalysisStore } from '@/store/useAnalysisStore';
 
-export type AgentStep = 'idle' | 'discovering' | 'confirming' | 'analyzing' | 'synthesizing' | 'done';
+export type AgentStep = 'idle' | 'discovering' | 'confirming' | 'verifying' | 'analyzing' | 'synthesizing' | 'done';
 
 export interface DiscoveredAccount {
   username: string;
@@ -28,6 +28,7 @@ interface AgentState {
   failedAccounts: string[];
   finalReport: AgentReport | null;
   currentAnalyzingAccount: string | null;
+  metaInfo: { sessionCount: number; totalAccounts: number } | null;
 
   setPrompt: (prompt: string) => void;
   setUserContext: (ctx: string) => void;
@@ -35,6 +36,7 @@ interface AgentState {
   toggleAccountSelection: (username: string) => void;
   startAnalysisAndSynthesis: () => Promise<void>;
   loadFromHistory: (report: AgentReport, analyzedData: any[]) => void;
+  loadMetaResult: (report: AgentReport, analyzedData: any[], metaInfo: { sessionCount: number; totalAccounts: number }) => void;
   reset: () => void;
 }
 
@@ -51,6 +53,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   failedAccounts: [],
   finalReport: null,
   currentAnalyzingAccount: null,
+  metaInfo: null,
 
   setPrompt: (prompt) => set({ prompt }),
   setUserContext: (userContext) => set({ userContext }),
@@ -65,7 +68,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   loadFromHistory: (report: AgentReport, analyzedData: any[]) => {
-    set({ finalReport: report, analyzedData, currentStep: 'done', error: null });
+    set({ finalReport: report, analyzedData, currentStep: 'done', error: null, metaInfo: null });
+  },
+
+  loadMetaResult: (report: AgentReport, analyzedData: any[], metaInfo) => {
+    set({ finalReport: report, analyzedData, currentStep: 'done', error: null, metaInfo });
   },
 
   reset: () => set({
@@ -79,7 +86,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
      analyzedData: [],
      failedAccounts: [],
      finalReport: null,
-     currentAnalyzingAccount: null
+     currentAnalyzingAccount: null,
+     metaInfo: null,
   }),
 
   startDiscovery: async () => {
@@ -129,16 +137,53 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       return;
     }
 
+    // ── Step 1: 계정 존재 여부 사전 확인 ─────────────────────────────
+    set({ currentStep: 'verifying', progress: 33, error: null });
+
+    let verifiedAccounts = selectedAccounts;
+    try {
+      const verifyRes = await fetch('/api/agent/verify-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usernames: selectedAccounts }),
+      });
+
+      if (verifyRes.ok) {
+        const verifyData = await verifyRes.json();
+        const { valid, invalid } = verifyData as { valid: string[]; invalid: string[] };
+
+        if (invalid.length > 0) {
+          console.log(`[Store] 존재하지 않는 계정 제외: ${invalid.join(', ')}`);
+        }
+
+        if (valid.length === 0) {
+          set({ currentStep: 'confirming', progress: 30, error: `선택된 계정이 모두 존재하지 않습니다 (${invalid.join(', ')}). AI가 잘못된 계정을 추천했습니다. 다시 탐색해주세요.` });
+          return;
+        }
+
+        verifiedAccounts = valid;
+
+        if (invalid.length > 0) {
+          // 잘못된 계정을 선택 목록에서 제거
+          set({ selectedAccounts: valid });
+        }
+      }
+      // verifyRes not ok → 검증 실패, 원래 목록으로 계속 진행
+    } catch {
+      // 네트워크 오류 등 → 검증 건너뛰고 계속
+    }
+
     set({ currentStep: 'analyzing', progress: 40, error: null, analyzedData: [], failedAccounts: [] });
 
     try {
         // Vercel Timeout(보통 10~60초)을 피하기 위해 클라이언트에서 순차적으로 단일 계정 분석 API를 호출합니다.
         const analyzedResults: any[] = [];
-        const total = selectedAccounts.length;
+        const total = verifiedAccounts.length;
 
         for (let i = 0; i < total; i++) {
-            const username = selectedAccounts[i];
+            const username = verifiedAccounts[i];
             set({ currentAnalyzingAccount: username, progress: 40 + (i / total) * 40 });
+            if (i > 0) await new Promise(r => setTimeout(r, 4000)); // Instagram 차단 방지 딜레이
             
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -157,7 +202,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                 profile: data.profile,
                 posts: data.posts || [],
                 visuals: data.visual_analysis,
-                captions: data.caption_analysis
+                captions: data.caption_analysis,
+                report: data.report,
             } as any);
         }
 
@@ -203,6 +249,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
               posts: acc.posts,
               visual_analysis: acc.visuals,
               caption_analysis: acc.captions,
+              report: acc.report,
             },
           });
         }

@@ -14,12 +14,15 @@ import {
   Legend,
 } from "chart.js";
 import { Doughnut, Radar, Bar } from "react-chartjs-2";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 
-ChartJS.register(ArcElement, RadialLinearScale, PointElement, LineElement, CategoryScale, LinearScale, BarElement, ChartTooltip, Legend);
+ChartJS.register(
+  ArcElement, RadialLinearScale, PointElement, LineElement,
+  CategoryScale, LinearScale, BarElement, ChartTooltip, Legend
+);
 
 type Tab = "overview" | "visual" | "caption" | "strategy";
+
+// ── Utils ──────────────────────────────────────────────────────
 
 function fmt(n: number) {
   if (!n) return "0";
@@ -37,1072 +40,1057 @@ function getPaletteColors(palette: string): string[] {
   if (p.includes("팝") || p.includes("비비드") || p.includes("vivid") || p.includes("컬러풀") || p.includes("colorful")) return ["#FF6B6B", "#FFD93D", "#6BCB77", "#4D96FF"];
   if (p.includes("그린") || p.includes("green") || p.includes("카키") || p.includes("khaki") || p.includes("올리브") || p.includes("olive")) return ["#4A7C59", "#78A86B", "#A8C89B", "#D4E8CC"];
   if (p.includes("퍼플") || p.includes("purple") || p.includes("바이올렛") || p.includes("violet") || p.includes("라벤더") || p.includes("lavender")) return ["#7C5C9A", "#A07CC0", "#C4A0E0", "#E0D0F5"];
-  if (p.includes("베이지") || p.includes("크림") || p.includes("어스") || p.includes("earth") || p.includes("내추럴") || p.includes("natural") || p.includes("뉴트럴") || p.includes("neutral") || p.includes("오프화이트")) return ["#D4C4A8", "#C8B89A", "#E8DCC8", "#B8A88A"];
-  if (p.includes("브라운") || p.includes("brown") || p.includes("카멜") || p.includes("camel") || p.includes("탄") || p.includes("tan")) return ["#8B6914", "#A08040", "#C4A882", "#D4BC9A"];
+  if (p.includes("베이지") || p.includes("크림") || p.includes("어스") || p.includes("earth") || p.includes("내추럴") || p.includes("natural") || p.includes("뉴트럴") || p.includes("neutral")) return ["#D4C4A8", "#C8B89A", "#E8DCC8", "#B8A88A"];
+  if (p.includes("브라운") || p.includes("brown") || p.includes("카멜") || p.includes("camel")) return ["#8B6914", "#A08040", "#C4A882", "#D4BC9A"];
   if (p.includes("오렌지") || p.includes("orange") || p.includes("주황")) return ["#E67E22", "#F39C12", "#FAB73B", "#FDE0A0"];
   if (p.includes("레드") || p.includes("red") || p.includes("빨강")) return ["#C0392B", "#E74C3C", "#F08080", "#FADBD8"];
   if (p.includes("옐로") || p.includes("yellow") || p.includes("노랑")) return ["#F1C40F", "#F7DC6F", "#FAE29F", "#FDF2CB"];
   return ["#94A3B8", "#CBD5E1", "#E2E8F0", "#F1F5F9"];
 }
 
-// ────────────────────────────────────────────────────────────
-// 공용 UI 컴포넌트
-// ────────────────────────────────────────────────────────────
+// ── Keyword Highlight Text ─────────────────────────────────────
+// 한 문장 안에서 의미있는 단어(4자+)만 크게, 조사/접속사는 작게
 
-function MagazineHeader({ num, sub, title }: { num: string; sub: string; title: string }) {
+const KO_STOPWORDS = new Set([
+  '그리고','하지만','또한','따라서','때문에','그러나','또는','그래서','그런데',
+  '하여','있어','있는','있으며','있습니다','있습니다.','이며','이다','이고','이나',
+  '가장','매우','조금','많이','다소','주로','특히','매우','대체로',
+  '전반적으로','전체적으로','상당히','통해서','통해','으로서','으로',
+  '에서','에도','에는','까지도','있어서','하고','하며','하는',
+  '합니다','합니다.','됩니다','됩니다.','보입니다','보입니다.',
+  '있으며','있으며,','이루고','이루며',
+  // 추가 — 흔한 서술어/형용사/부사
+  '활용','사용','보여','보여주','나타','나타나','강조','구성','형성',
+  '방식','스타일','느낌','분위기','이미지','콘텐츠','계정','포스팅',
+  '업로드','팔로워','팔로잉','좋아요','댓글','릴스','캐러셀',
+  '일관','일관성','유지','통일','자연','자연스','편집','필터',
+  '전략','마케팅','브랜드','브랜딩','포맷','형태','구조',
+]);
+
+function KeywordText({
+  text,
+  keywords = [],
+  baseClass = "text-base text-slate-500 leading-relaxed",
+  keyClass  = "text-2xl text-slate-900 leading-tight",
+}: { text: string; keywords?: string[]; baseClass?: string; keyClass?: string }) {
+  if (!text) return null;
+  const kwSet = new Set(keywords.map(k => k.toLowerCase()));
   return (
-    <div className="mb-12">
-      <span className="block text-8xl leading-none font-black text-slate-100 tracking-tighter mb-1">{num}</span>
-      <span className="block text-xs font-black text-indigo-600 uppercase tracking-widest mb-3">{sub}</span>
-      <h2 className="text-4xl font-black text-slate-900">{title}</h2>
+    <>
+      {text.split(" ").map((word, i, arr) => {
+        const clean = word.replace(/[,.\!?:；。]/g, "").toLowerCase();
+        const isKeyword = kwSet.size > 0 && kwSet.has(clean);
+        return (
+          <span key={i} className={isKeyword ? keyClass : baseClass}>
+            {word}{i < arr.length - 1 ? " " : ""}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+// ── Magazine Section Header ────────────────────────────────────
+// 작은 컬러 태그 → 큰 제목 → 얇은 룰. 스캔 가능한 계층 구조.
+
+function SectionHeader({
+  tag, title, tagColor = "#5E81F4", titleClass,
+}: {
+  tag: string; title: string; tagColor?: string; titleClass?: string;
+}) {
+  return (
+    <div className="mb-10">
+      <span
+        className="inline-block text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-4"
+        style={{ background: `${tagColor}15`, color: tagColor }}
+      >
+        {tag}
+      </span>
+      <h2 className={titleClass ?? "text-4xl font-black tracking-tight text-slate-900 leading-tight"}>{title}</h2>
+      <div className="h-px bg-slate-100 mt-5" />
     </div>
   );
 }
 
-function InfoHeadline({ children, className }: { children: React.ReactNode; className?: string }) {
+// ── Profile Hero ───────────────────────────────────────────────
+
+function ProfileAvatar({ src, imageData, fallback }: {
+  src?: string;
+  imageData?: { base64: string; mimeType: string };
+  fallback: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const imgSrc = imageData
+    ? `data:${imageData.mimeType};base64,${imageData.base64}`
+    : src;
+  if (!imgSrc || failed) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-2xl font-black text-white/50">
+        {fallback}
+      </div>
+    );
+  }
   return (
-    <h3 className={`pl-4 border-l-4 border-indigo-600 font-black text-xl text-slate-900 mb-6 ${className ?? ""}`}>
-      {children}
-    </h3>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={imgSrc}
+      alt=""
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
   );
 }
 
-function DataLabel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <span className={`block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 ${className ?? ""}`}>
-      {children}
-    </span>
-  );
-}
+function ProfileHero({ profile, posts }: { profile: any; posts: any[] }) {
+  const avgLikes = posts.length
+    ? Math.round(posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / posts.length)
+    : 0;
+  const engRate = profile.followers_count > 0
+    ? ((avgLikes / profile.followers_count) * 100).toFixed(2)
+    : "0.00";
 
-function SubTabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-6 py-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-        active ? "bg-slate-900 text-white shadow-md" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function PaletteSwatch({ palette }: { palette: string }) {
-  const colors = getPaletteColors(palette);
-  return (
-    <div className="flex flex-col gap-3 mt-2">
-      <Badge variant="secondary" className="w-fit bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 border-none">
-        {palette}
-      </Badge>
-      <div className="flex items-center gap-2">
-        <TooltipProvider>
-          {colors.map((c, i) => (
-            <Tooltip key={i}>
-              <TooltipTrigger>
-                <div
-                  className="w-10 h-10 rounded-full shadow-md shrink-0 cursor-pointer border-2 border-white/80 hover:scale-110 transition-transform duration-200"
-                  style={{ background: c }}
-                />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="bg-slate-900 text-white font-mono text-xs">
-                Hex: {c}
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </TooltipProvider>
+    <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(160deg,#1C1D21 0%,#23263a 100%)" }}>
+      <div className="px-7 pt-7 pb-5 flex items-center gap-5">
+        <div className="w-[68px] h-[68px] rounded-2xl overflow-hidden shrink-0 bg-white/10">
+          <ProfileAvatar src={profile.profile_image_url} imageData={profile.profile_image_data} fallback={profile.username?.charAt(0).toUpperCase() ?? "?"} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl font-black text-white tracking-tight">@{profile.username}</h1>
+            {profile.is_verified && (
+              <span className="text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full uppercase tracking-widest">인증</span>
+            )}
+          </div>
+          {profile.bio && <p className="text-sm text-white/40 mt-1 line-clamp-1">{profile.bio}</p>}
+        </div>
+      </div>
+      <div className="grid grid-cols-4 border-t border-white/5">
+        {[
+          { label: "팔로워", value: fmt(profile.followers_count), color: "#5E81F4" },
+          { label: "평균 좋아요", value: fmt(avgLikes), color: "#16B1FF" },
+          { label: "참여율", value: `${engRate}%`, color: "#7CE7AC" },
+          { label: "총 게시물", value: fmt(profile.posts_count), color: "#F4BE5E" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="px-6 py-4 border-r border-white/5 last:border-r-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-white/25 mb-1">{label}</p>
+            <p className="text-2xl font-black leading-none" style={{ color }}>{value}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// 포스트별 좋아요 바 차트
-function PostLikesChart({ posts }: { posts: any[] }) {
-  const labels = posts.map((_: any, i: number) => `#${i + 1}`);
-  const data = {
-    labels,
+// ── Tab Nav ────────────────────────────────────────────────────
+
+function TabNav({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "overview", label: "오버뷰" },
+    { key: "visual", label: "비주얼 전략" },
+    { key: "caption", label: "캡션 전략" },
+    { key: "strategy", label: "종합 전략" },
+  ];
+  return (
+    <div className="flex border-b border-slate-200 mt-5">
+      {tabs.map(({ key, label }) => (
+        <button key={key}
+          onClick={() => { onChange(key); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          className={`px-5 py-3.5 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
+            active === key
+              ? "border-slate-900 text-slate-900"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Post Image with fallback ────────────────────────────────────
+
+function PostImg({ src, className }: { src?: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className={`bg-slate-100 ${className ?? ""}`} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className={`object-cover ${className ?? ""}`}
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// ── Overview Tab ───────────────────────────────────────────────
+
+function OverviewTab({ profile, posts, summary, summaryKeywords, keyPatterns }: {
+  profile: any; posts: any[]; summary?: string; summaryKeywords?: string[]; keyPatterns?: string[];
+}) {
+  const sortedByLikes = [...posts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0));
+  const topPost = sortedByLikes[0];
+  const avgLikes = posts.length
+    ? Math.round(posts.reduce((a, p) => a + (p.likes_count ?? 0), 0) / posts.length)
+    : 0;
+
+  const engData = {
+    labels: posts.map((_: any, i: number) => `#${i + 1}`),
     datasets: [{
       data: posts.map((p: any) => p.likes_count ?? 0),
-      backgroundColor: posts.map((p: any) =>
-        p.is_reel ? "#14b8a6" : p.is_carousel ? "#4f46e5" : "#94a3b8"
-      ),
-      borderRadius: 6,
+      backgroundColor: posts.map((p: any) => p.is_reel ? "#16B1FF" : p.is_carousel ? "#5E81F4" : "#CBD5E1"),
+      borderRadius: 4, borderWidth: 0, maxBarThickness: 28,
     }],
   };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: {
-      label: (ctx: any) => ` ${ctx.raw.toLocaleString()} 좋아요`,
-    }}},
-    scales: {
-      y: { beginAtZero: true, grid: { color: "#f1f5f9" }, ticks: { font: { size: 11 } } },
-      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-    },
-  };
-  return <Bar data={data} options={options} />;
-}
-
-// 포맷별 평균 좋아요 비교 바 차트
-function FormatAvgLikesChart({ posts }: { posts: any[] }) {
-  const reels = posts.filter((p: any) => p.is_reel);
-  const carousels = posts.filter((p: any) => p.is_carousel);
-  const singles = posts.filter((p: any) => !p.is_reel && !p.is_carousel);
-  const avg = (arr: any[]) =>
-    arr.length ? Math.round(arr.reduce((a, p) => a + (p.likes_count ?? 0), 0) / arr.length) : 0;
-  const vals = [avg(reels), avg(carousels), avg(singles)];
-  const data = {
-    labels: [`릴스\n(${reels.length}개)`, `캐러셀\n(${carousels.length}개)`, `단일\n(${singles.length}개)`],
-    datasets: [{
-      data: vals,
-      backgroundColor: ["#14b8a6", "#4f46e5", "#94a3b8"],
-      borderRadius: 8,
-    }],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: {
-      label: (ctx: any) => ` 평균 ${ctx.raw.toLocaleString()} 좋아요`,
-    }}},
-    scales: {
-      y: { beginAtZero: true, grid: { color: "#f1f5f9" }, ticks: { font: { size: 11 } } },
-      x: { grid: { display: false }, ticks: { font: { size: 12, weight: "bold" as const } } },
-    },
-  };
-  return <Bar data={data} options={options} />;
-}
-
-// 채도/밝기 dot 인디케이터
-function LevelDots({ label, value }: { label: string; value: string }) {
-  const v = value?.toLowerCase() ?? "";
-  const level = v.includes("높") || v.includes("high") || v.includes("선명") || v.includes("vibrant") ? 4
-    : v.includes("중") || v.includes("mid") || v.includes("보통") ? 2
-    : v.includes("낮") || v.includes("low") || v.includes("무") || v.includes("soft") || v.includes("muted") ? 1
-    : 3;
-  return (
-    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-      <span className="block text-[10px] text-slate-400 font-black mb-2 uppercase tracking-tighter">{label}</span>
-      <div className="flex items-center gap-2">
-        {[1,2,3,4,5].map(i => (
-          <div key={i} className={`w-4 h-4 rounded-full ${i <= level ? "bg-indigo-600" : "bg-slate-200"}`} />
-        ))}
-        <span className="ml-2 text-sm font-black text-slate-700">{value}</span>
-      </div>
-    </div>
-  );
-}
-
-function IdentityGauge({ score }: { score: number }) {
-  const data = {
-    datasets: [
-      {
-        data: [score, 10 - score],
-        backgroundColor: ["#4f46e5", "#1e293b"],
-        borderWidth: 0,
-      },
-    ],
-  };
-  const options = {
-    cutout: "85%" as const,
-    rotation: -135,
-    circumference: 270,
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { enabled: false } },
-  };
-  return (
-    <div className="relative w-44 h-44 mx-auto">
-      <Doughnut data={data} options={options} />
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-5xl font-black text-white leading-none">{score}</span>
-        <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">/ 10</span>
-      </div>
-    </div>
-  );
-}
-
-function SwotRadarChart({ swot }: { swot: any }) {
-  const s = Math.min((swot.strengths?.length ?? 0) * 3, 10) || 7;
-  const o = Math.min((swot.opportunities?.length ?? 0) * 3, 10) || 6;
-  const w = Math.min((swot.weaknesses?.length ?? 0) * 3, 10) || 4;
-  const t = Math.min((swot.threats?.length ?? 0) * 3, 10) || 3;
-
-  const data = {
-    labels: ["Strength", "Opportunity", "Weakness", "Threat"],
-    datasets: [
-      {
-        data: [s, o, w, t],
-        backgroundColor: "rgba(255, 255, 255, 0.15)",
-        borderColor: "#fff",
-        borderWidth: 2,
-        pointBackgroundColor: "#4f46e5",
-        pointRadius: 5,
-      },
-    ],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { enabled: false } },
-    scales: {
-      r: {
-        beginAtZero: true,
-        max: 10,
-        ticks: { display: false },
-        grid: { color: "rgba(255,255,255,0.2)" },
-        angleLines: { color: "rgba(255,255,255,0.2)" },
-        pointLabels: { color: "#fff", font: { size: 14, weight: "bold" as const } },
-      },
-    },
-  };
-  return <Radar data={data} options={options} />;
-}
-
-// ────────────────────────────────────────────────────────────
-// 탭 1: 오버뷰
-// ────────────────────────────────────────────────────────────
-
-function OverviewPane({ profile, posts, summary }: { profile: any; posts: any[]; summary?: string }) {
-  const avgLikes = posts.length > 0 ? Math.round(posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / posts.length) : 0;
-  const avgComments = posts.length > 0 ? Math.round(posts.reduce((a: number, p: any) => a + (p.comments_count ?? 0), 0) / posts.length) : 0;
-  const reelsCount = posts.filter((p: any) => p.is_reel).length;
-  const carouselCount = posts.filter((p: any) => p.is_carousel).length;
-  const singleCount = posts.filter((p: any) => !p.is_reel && !p.is_carousel).length;
 
   return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="01" sub="Account Overview" title="데이터 수집 및 계정 개요" />
+    <div className="space-y-20 pt-12">
 
-      {/* 프로필 카드 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-        <div className="pt-4">
-          <p className="text-lg text-slate-600 leading-relaxed">
-            수집된 프로필 데이터와 최근 게시물을 기반으로 분석한 브랜드 포지셔닝 요약입니다.
-          </p>
-        </div>
-        <div className="p-10 bg-white rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-indigo-500">
-          <DataLabel>계정 프로필</DataLabel>
-          <div className="mt-5 flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <div className="w-28 h-28 rounded-2xl bg-slate-100 border border-slate-200 shadow-sm shrink-0 overflow-hidden flex items-center justify-center text-slate-400 font-black text-4xl">
-              {profile.profile_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.profile_image_url}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-              ) : (
-                profile.username?.charAt(0).toUpperCase()
-              )}
+      {/* ① 포스트 그리드(좌) + TOP 포스트 & AI 요약(우) */}
+      {posts.length > 0 && (
+        <section className="grid grid-cols-[1fr_320px] gap-8 items-start">
+          <div>
+            <SectionHeader tag="Content Feed" title={`최근 게시물 ${posts.length}개`} tagColor="#5E81F4" />
+            <div className="grid grid-cols-3 gap-2">
+              {posts.map((p: any, i: number) => (
+                <a key={i} href={p.post_url} target="_blank" rel="noopener noreferrer" className="group relative block">
+                  <div className="aspect-square rounded-xl overflow-hidden relative">
+                    <PostImg src={p.image_urls?.[0]} className="w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex flex-col items-center justify-center">
+                      <span className="text-white font-black text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        ♥ {fmt(p.likes_count)}
+                      </span>
+                    </div>
+                    {p === topPost && (
+                      <div className="absolute top-1.5 left-1.5 bg-yellow-400 text-yellow-900 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">TOP</div>
+                    )}
+                    {(p.is_reel || p.is_carousel) && (
+                      <span className="absolute top-1.5 right-1.5 text-[8px] font-black text-white px-1.5 py-0.5 rounded"
+                        style={{ background: p.is_reel ? "#16B1FF" : "#5E81F4" }}>
+                        {p.is_reel ? "R" : "C"}
+                      </span>
+                    )}
+                  </div>
+                </a>
+              ))}
             </div>
-            <div className="text-center sm:text-left flex-1">
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap justify-center sm:justify-start">
-                <h3 className="text-2xl font-black text-slate-900">@{profile.username}</h3>
-                {profile.is_verified && (
-                  <span className="text-[10px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded uppercase">인증됨</span>
+            <div className="flex gap-4 mt-3">
+              {[{ color: "#16B1FF", label: "릴스" }, { color: "#5E81F4", label: "캐러셀" }, { color: "#CBD5E1", label: "단일" }].map(({ color, label }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                  <span className="text-xs text-slate-400">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 우: TOP 포스트 + AI 요약 */}
+          <div className="space-y-5 pt-[72px]">
+            {topPost && (
+              <div className="rounded-2xl overflow-hidden border border-slate-100">
+                <div className="relative h-44">
+                  <PostImg src={topPost.image_urls?.[0]} className="w-full h-full" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                  <div className="absolute bottom-3 left-4 right-4">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">최고 성과 게시물</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-black text-white">♥ {fmt(topPost.likes_count)}</span>
+                      <span className="text-xs text-white/50">
+                        평균 대비 +{Math.round(((topPost.likes_count - avgLikes) / (avgLikes || 1)) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {topPost.caption && (
+                  <div className="px-4 py-3 bg-white">
+                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{topPost.caption}</p>
+                  </div>
                 )}
               </div>
-              {profile.full_name && <p className="text-base font-bold text-slate-700 mb-3">{profile.full_name}</p>}
-              {profile.bio && (
-                <p className="text-sm text-slate-600 mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
-                  {profile.bio}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
-                {[
-                  { label: "팔로워", val: fmt(profile.followers_count) },
-                  { label: "팔로잉", val: fmt(profile.following_count) },
-                  { label: "게시물", val: fmt(profile.posts_count) },
-                ].map(({ label, val }) => (
-                  <div key={label} className="bg-slate-50 px-5 py-3 rounded-2xl border border-slate-100 text-center min-w-[90px]">
-                    <span className="block text-[10px] text-slate-400 font-black mb-0.5 uppercase tracking-tighter">{label}</span>
-                    <span className="font-black text-slate-900 text-xl">{val}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 참여 지표 */}
-      {posts.length > 0 && (
-        <div>
-          <InfoHeadline>수집 게시물 참여 지표 ({posts.length}개 기준)</InfoHeadline>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-            {[
-              { label: "평균 좋아요", val: fmt(avgLikes), sub: "게시물당" },
-              { label: "평균 댓글", val: fmt(avgComments), sub: "게시물당" },
-              { label: "단일 이미지", val: `${singleCount}개`, sub: `전체 ${posts.length}개 중` },
-              { label: "카루셀", val: `${carouselCount}개`, sub: `전체 ${posts.length}개 중` },
-              { label: "릴스", val: `${reelsCount}개`, sub: `전체 ${posts.length}개 중` },
-            ].map(({ label, val, sub }) => (
-              <div key={label} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm text-center">
-                <span className="font-black text-3xl text-slate-900 block">{val}</span>
-                <span className="block text-[10px] text-slate-400 font-black mt-2 uppercase tracking-tighter">{label}</span>
-                <span className="text-[9px] text-slate-300">{sub}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 포스트 퍼포먼스 차트 */}
-      {posts.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-lg">
-            <InfoHeadline>포스트별 좋아요</InfoHeadline>
-            <div className="flex gap-4 text-[10px] font-black text-slate-400 mb-4 flex-wrap">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" />릴스</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" />캐러셀</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-400 inline-block" />단일</span>
-            </div>
-            <div className="h-52">
-              <PostLikesChart posts={posts} />
-            </div>
-          </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-lg">
-            <InfoHeadline>포맷별 평균 좋아요</InfoHeadline>
-            <p className="text-xs text-slate-400 mb-4">어떤 포맷이 가장 반응이 좋은지</p>
-            <div className="h-52">
-              <FormatAvgLikesChart posts={posts} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 게시물 갤러리 */}
-      {posts.length > 0 && (
-        <div className="bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] p-10 rounded-3xl border border-slate-200">
-          <InfoHeadline className="mb-8">최근 게시물 갤러리</InfoHeadline>
-          <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-hide">
-            {posts.map((p: any, i: number) => (
-              <div key={i} className="min-w-[190px] max-w-[190px] bg-white p-2.5 rounded-2xl shadow-sm border border-slate-100 shrink-0">
-                <div className="aspect-square w-full bg-slate-100 rounded-xl relative overflow-hidden mb-3">
-                  {p.image_urls?.[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.image_urls[0]}
-                      alt=""
-                      className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-300"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  ) : null}
-                  {(p.is_reel || p.is_carousel) && (
-                    <span className="absolute top-2 right-2 bg-slate-900/90 text-white text-[9px] px-1.5 py-0.5 rounded-md font-black uppercase">
-                      {p.is_reel ? "REELS" : "CAROUSEL"}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] space-y-1 px-1">
-                  {p.caption && (
-                    <p className="text-slate-700 font-medium leading-tight line-clamp-2">
-                      {p.caption.slice(0, 60)}
-                      {p.caption.length > 60 ? "…" : ""}
-                    </p>
-                  )}
-                  {p.hashtags?.length > 0 && (
-                    <p className="text-[10px] text-indigo-500 font-bold">{p.hashtags.slice(0, 3).join(" ")}</p>
-                  )}
-                  <div className="flex gap-2 text-[10px] font-black text-slate-400 pt-1.5 border-t border-slate-50 mt-1.5">
-                    <span>♥ {fmt(p.likes_count)}</span>
-                    {p.comments_count > 0 && <span>✦ {fmt(p.comments_count)}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* AI 브랜드 포지셔닝 요약 */}
-      {summary && (
-        <div className="bg-gradient-to-br from-slate-900 to-indigo-900 p-12 lg:p-16 rounded-3xl shadow-2xl relative overflow-hidden text-white">
-          <div className="absolute right-0 bottom-0 w-[500px] h-[500px] bg-indigo-500 rounded-full mix-blend-screen filter blur-[100px] opacity-30 pointer-events-none" />
-          <span className="bg-white/10 border border-white/20 text-[10px] px-4 py-2 rounded-full font-bold uppercase tracking-wider mb-8 inline-block relative z-10">
-            Brand Positioning Summary
-          </span>
-          <p className="text-2xl md:text-3xl font-black leading-snug relative z-10 text-indigo-50 mt-4">"{summary}"</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// 탭 2: 비주얼
-// ────────────────────────────────────────────────────────────
-
-function VisualPane({ v }: { v: any }) {
-  const score = v.visual_identity?.score;
-  const ratio = v.grid_strategy?.content_ratio ?? {};
-  const singlePct = ratio.single_image ?? 0;
-  const carouselPct = ratio.carousel ?? 0;
-  const reelsPct = ratio.reels ?? 0;
-
-  return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="02" sub="Visual Analysis" title="비주얼 정체성 분석" />
-
-      {v.summary && (() => {
-        const parts = v.summary.split(/[.。]/);
-        const headline = parts[0];
-        const rest = parts.slice(1).join('.').trim();
-        return (
-          <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200">
-            <DataLabel>비주얼 종합 진단</DataLabel>
-            <p className="text-2xl md:text-3xl font-black text-slate-900 mb-4 leading-tight">{headline}{headline && "."}</p>
-            {rest && <p className="text-base text-slate-600 leading-relaxed">{rest}</p>}
-          </div>
-        );
-      })()}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* 피드 톤 */}
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-indigo-500">
-          <InfoHeadline>피드 톤 (Feed Tone)</InfoHeadline>
-          <div className="space-y-6">
-            {v.feed_tone?.palette && (
-              <div>
-                <DataLabel>색감 팔레트</DataLabel>
-                <PaletteSwatch palette={v.feed_tone.palette} />
-              </div>
             )}
-            <div className="grid grid-cols-1 gap-4">
-              {v.feed_tone?.saturation && <LevelDots label="채도" value={v.feed_tone.saturation} />}
-              {v.feed_tone?.brightness && <LevelDots label="밝기" value={v.feed_tone.brightness} />}
-            </div>
-            {v.feed_tone?.filter_consistency && (
-              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                <span className="block text-[10px] text-slate-400 font-black mb-1.5 uppercase tracking-tighter">필터 / 보정 일관성</span>
-                <p className="text-sm text-slate-900 font-medium leading-relaxed">{v.feed_tone.filter_consistency}</p>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* 콘텐츠 유형 */}
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-teal-500">
-          <InfoHeadline>콘텐츠 유형</InfoHeadline>
-          {(singlePct > 0 || carouselPct > 0 || reelsPct > 0) && (
-            <div className="grid grid-cols-3 gap-3 mb-8">
-              {[
-                { label: "단일 이미지", val: singlePct, color: "text-slate-700" },
-                { label: "카루셀", val: carouselPct, color: "text-indigo-600" },
-                { label: "릴스", val: reelsPct, color: "text-teal-600" },
-              ].map(({ label, val, color }) => (
-                <div key={label} className="text-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <span className={`text-4xl font-black ${color} block leading-none mb-1`}>{val}%</span>
-                  <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter">{label}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="space-y-4">
-            {v.content_types?.primary_subjects?.length > 0 && (
-              <div>
-                <DataLabel>주요 피사체</DataLabel>
-                <div className="flex flex-wrap gap-2 items-center">
-                  {v.content_types.primary_subjects.map((s: string, i: number) => (
-                    <Badge key={i} variant="outline" className={`px-3 py-1.5 border-slate-200 text-slate-700 shadow-sm ${i % 2 === 0 ? 'text-sm font-black' : 'text-xs font-bold'}`}>
-                      {s}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {v.content_types?.person_frequency && (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <span className="block text-[10px] text-slate-400 font-black mb-1 uppercase tracking-tighter">인물 등장 방식</span>
-                <p className="text-sm text-slate-900 font-medium">{v.content_types.person_frequency}</p>
-              </div>
-            )}
-            {v.content_types?.product_style && (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <span className="block text-[10px] text-slate-400 font-black mb-1 uppercase tracking-tighter">제품 촬영 스타일</span>
-                <p className="text-sm text-slate-900 font-medium">{v.content_types.product_style}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 구도 & 레이아웃 */}
-      <div className="bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] p-10 lg:p-14 rounded-3xl border border-slate-200">
-        <InfoHeadline>구도 & 레이아웃</InfoHeadline>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
-          <div className="flex flex-col items-center gap-4">
-            {/* 세련된 와이어프레임으로 교체 */}
-            <div className="aspect-square bg-white rounded-2xl p-3 grid grid-cols-3 gap-1.5 border border-slate-200 shadow-sm w-full max-w-[200px] relative">
-              {Array.from({ length: 9 }).map((_, i) => (
-                <div key={i} className={`border border-slate-200 rounded-md ${i === 4 ? "bg-indigo-50 border-indigo-200" : "bg-white"}`} />
-              ))}
-              {v.composition?.whitespace && (
-                <div className="absolute -top-3 -right-3 bg-indigo-600 text-white text-[9px] font-black px-2.5 py-1.5 rounded-full shadow-lg whitespace-nowrap">
-                  여백 활용 ✓
-                </div>
-              )}
-            </div>
-            <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Grid Preview</span>
-          </div>
-
-          <div className="lg:col-span-2 space-y-5">
-            {v.composition?.dominant_patterns?.length > 0 && (
-              <div>
-                <DataLabel>주요 구도 패턴</DataLabel>
-                <div className="flex flex-wrap gap-2">
-                  {v.composition.dominant_patterns.map((p: string, i: number) => (
-                    <span key={i} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 shadow-sm">
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {v.composition?.whitespace && (
-              <div>
-                <DataLabel>여백 활용</DataLabel>
-                <p className="text-sm text-slate-800 bg-white p-5 rounded-xl border border-slate-100 shadow-sm leading-relaxed">{v.composition.whitespace}</p>
-              </div>
-            )}
-            {v.composition?.text_overlay && (
-              <div>
-                <DataLabel>텍스트 오버레이</DataLabel>
-                <p className="text-sm text-slate-800 bg-white p-5 rounded-xl border border-slate-100 shadow-sm leading-relaxed">{v.composition.text_overlay}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* 그리드 전략 */}
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg">
-          <InfoHeadline>그리드 전략</InfoHeadline>
-          <div className="space-y-6">
-            {v.grid_strategy?.has_pattern != null && (
-              <span
-                className={`inline-block px-4 py-2 rounded-xl text-sm font-black uppercase tracking-wider ${
-                  v.grid_strategy.has_pattern ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600"
-                }`}
-              >
-                {v.grid_strategy.has_pattern ? "그리드 패턴 있음" : "패턴 없음 (자유 구성)"}
-              </span>
-            )}
-            {v.grid_strategy?.pattern_description && (
-              <div>
-                <DataLabel>패턴 설명</DataLabel>
-                <p className="text-sm text-slate-700 bg-slate-50 p-5 rounded-xl border border-slate-100 leading-relaxed">{v.grid_strategy.pattern_description}</p>
-              </div>
-            )}
-            <div>
-              <DataLabel>포맷 비율 (단일 / 카루셀 / 릴스)</DataLabel>
-              <div className="flex h-5 rounded-full overflow-hidden mb-4 bg-slate-100">
-                {singlePct > 0 && <div className="bg-slate-400 transition-all" style={{ width: `${singlePct}%` }} />}
-                {carouselPct > 0 && <div className="bg-indigo-500 transition-all" style={{ width: `${carouselPct}%` }} />}
-                {reelsPct > 0 && <div className="bg-teal-500 transition-all" style={{ width: `${reelsPct}%` }} />}
-              </div>
-              <div className="flex gap-5 text-xs font-black text-slate-500 flex-wrap">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-400 inline-block" />단일 {singlePct}%</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" />카루셀 {carouselPct}%</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-teal-500 inline-block" />릴스 {reelsPct}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 아이덴티티 점수 - 게이지 차트 */}
-        <div className="bg-slate-900 p-10 rounded-3xl shadow-xl text-white flex flex-col justify-center items-center text-center gap-6">
-          <DataLabel className="text-slate-500">Visual Identity Strength</DataLabel>
-          {score != null ? (
-            <IdentityGauge score={score} />
-          ) : (
-            <span className="text-7xl font-black text-white">–</span>
-          )}
-          {v.visual_identity?.recognizability && (
-            <p className="text-sm text-slate-300 font-medium bg-white/5 p-5 rounded-2xl border border-white/10 italic leading-relaxed max-w-xs">
-              "{v.visual_identity.recognizability}"
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// 탭 3: 캡션
-// ────────────────────────────────────────────────────────────
-
-function CaptionPane({ c, posts }: { c: any; posts: any[] }) {
-  const categories: { name: string; percentage: number }[] = c.content_categories?.categories ?? [];
-  const colorMap: Record<string, string> = {
-    교육형: "bg-blue-500",
-    감성형: "bg-indigo-500",
-    소통형: "bg-teal-500",
-    정보형: "bg-slate-400",
-    프로모션형: "bg-amber-500",
-  };
-  const hashtagExamples: string[] = c.hashtag_strategy?.examples ?? [];
-  const hashtagTypes: string[] = c.hashtag_strategy?.types ?? [];
-  const topThemes: string[] = c.content_categories?.top_themes ?? [];
-
-  // 포스트에서 해시태그 빈도 계산
-  const hashtagFreq: Record<string, number> = {};
-  posts.forEach((p: any) => {
-    (p.hashtags ?? []).forEach((tag: string) => {
-      const t = tag.toLowerCase();
-      hashtagFreq[t] = (hashtagFreq[t] ?? 0) + 1;
-    });
-  });
-  const topHashtags = Object.entries(hashtagFreq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="03" sub="Caption & Text Strategy" title="캡션 및 텍스트 전략 분석" />
-
-      {c.summary && (
-        <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200">
-          <DataLabel>캡션 전략 종합 진단</DataLabel>
-          <p className="text-base text-slate-700 leading-relaxed">{c.summary}</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-        <div className="space-y-8">
-          {/* 콘텐츠 카테고리 */}
-          <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-indigo-500">
-            <InfoHeadline>카테고리 분포</InfoHeadline>
-            <div className="space-y-5 mb-8">
-              {categories.map((cat, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <span className="w-24 text-xs font-black text-slate-500 uppercase tracking-tighter shrink-0">{cat.name}</span>
-                  <div className="flex-1 h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                    <div className={`h-full ${colorMap[cat.name] ?? "bg-slate-300"} transition-all`} style={{ width: `${cat.percentage}%` }} />
-                  </div>
-                  <span className="text-sm font-black text-slate-900 w-10 text-right">{cat.percentage}%</span>
-                </div>
-              ))}
-            </div>
-            {topThemes.length > 0 && (
-              <div className="pt-6 border-t border-slate-100">
-                <DataLabel>주력 콘텐츠 테마 TOP {topThemes.length}</DataLabel>
-                <div className="flex flex-wrap gap-2 mt-2 items-end">
-                  {topThemes.map((theme, i) => {
-                    const size = i === 0 ? "text-lg px-4 py-2.5" : i === 1 ? "text-sm px-3 py-2" : "text-xs px-2.5 py-1.5";
-                    const weight = i === 0 ? "font-black" : "font-bold";
-                    return (
-                      <span key={i} className={`flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl ${size} ${weight}`}>
-                        <span className="font-black text-indigo-400 text-[10px]">#{i + 1}</span> {theme}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 톤 & 매너 */}
-          <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-teal-500">
-            <InfoHeadline>톤 & 매너</InfoHeadline>
-            <div className="space-y-6">
-              {c.tone_manner?.speech_style && (
-                <div className="bg-slate-900 p-6 rounded-2xl">
-                  <DataLabel className="text-slate-500">말투 스타일</DataLabel>
-                  <p className="text-3xl font-black text-white leading-tight">"{c.tone_manner.speech_style}"</p>
-                </div>
-              )}
-              {c.tone_manner?.emotional_keywords?.length > 0 && (
-                <div>
-                  <DataLabel>감성 키워드</DataLabel>
-                  <div className="flex gap-2 flex-wrap">
-                    {c.tone_manner.emotional_keywords.map((k: string, i: number) => (
-                      <span key={i} className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-600">{k}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {(c.tone_manner?.emoji?.frequency || c.tone_manner?.emoji?.types?.length > 0) && (
-                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
-                  <DataLabel>이모지 패턴</DataLabel>
-                  {c.tone_manner.emoji?.frequency && (
-                    <p className="text-sm font-bold text-slate-700 mb-2">
-                      사용 빈도: <span className="text-slate-900">{c.tone_manner.emoji.frequency}</span>
-                    </p>
-                  )}
-                  {c.tone_manner.emoji?.types?.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {c.tone_manner.emoji.types.map((t: string, i: number) => (
-                        <span key={i} className="px-2.5 py-1.5 bg-white border border-slate-100 rounded-lg text-base">{t}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 우측: 캡션 전략 + 해시태그 */}
-        <div className="space-y-8">
-          <div className="bg-slate-50 p-10 rounded-3xl border border-slate-200">
-            <InfoHeadline>캡션 작성 전략</InfoHeadline>
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
-              {c.caption_strategy?.hook_style && (
-                <div className="flex">
-                  <div className="w-1.5 bg-indigo-500 shrink-0" />
-                  <div className="p-6 flex-1">
-                    <span className="text-[10px] font-black text-indigo-500 uppercase mb-2 block">01 Hook Style — 첫 줄 훅 전략</span>
-                    <p className="text-base font-black text-slate-900 leading-snug mb-1">
-                      {c.caption_strategy.hook_style.split(/[.:。]/)[0]}
-                    </p>
-                    {c.caption_strategy.hook_style.split(/[.:。]/).slice(1).join(".").trim() && (
-                      <p className="text-xs text-slate-500 leading-relaxed">{c.caption_strategy.hook_style.split(/[.:。]/).slice(1).join(".").trim()}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {c.caption_strategy?.cta_pattern && (
-                <div className="flex border-t border-slate-100">
-                  <div className="w-1.5 bg-teal-500 shrink-0" />
-                  <div className="p-6 flex-1">
-                    <span className="text-[10px] font-black text-teal-500 uppercase mb-2 block">02 CTA Pattern — 행동 유도 방식</span>
-                    <p className="text-base font-black text-slate-900 leading-snug mb-1">
-                      {c.caption_strategy.cta_pattern.split(/[.:。]/)[0]}
-                    </p>
-                    {c.caption_strategy.cta_pattern.split(/[.:。]/).slice(1).join(".").trim() && (
-                      <p className="text-xs text-slate-500 leading-relaxed">{c.caption_strategy.cta_pattern.split(/[.:。]/).slice(1).join(".").trim()}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-              {c.caption_strategy?.formatting && (
-                <div className="flex border-t border-slate-100">
-                  <div className="w-1.5 bg-purple-500 shrink-0" />
-                  <div className="p-6 flex-1">
-                    <span className="text-[10px] font-black text-purple-500 uppercase mb-2 block">03 Formatting — 줄바꿈 / 단락 스타일</span>
-                    <p className="text-base font-black text-slate-900 leading-snug mb-1">
-                      {c.caption_strategy.formatting.split(/[.:。]/)[0]}
-                    </p>
-                    {c.caption_strategy.formatting.split(/[.:。]/).slice(1).join(".").trim() && (
-                      <p className="text-xs text-slate-500 leading-relaxed">{c.caption_strategy.formatting.split(/[.:。]/).slice(1).join(".").trim()}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 해시태그 전략 — 테이블 레이아웃 */}
-          {(hashtagTypes.length > 0 || hashtagExamples.length > 0) && (
-            <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg">
-              <InfoHeadline>해시태그 전략</InfoHeadline>
-              {hashtagTypes.length > 0 && hashtagExamples.length > 0 ? (
-                <div className="overflow-hidden rounded-2xl border border-slate-100">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr>
-                        <th className="px-5 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-400">TYPE</th>
-                        <th className="px-5 py-3 text-left font-black text-[10px] uppercase tracking-widest text-slate-400">EXAMPLE</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {hashtagTypes.map((type, i) => (
-                        <tr key={i} className="hover:bg-slate-50 transition">
-                          <td className="px-5 py-3 font-bold text-slate-700">{type}</td>
-                          <td className="px-5 py-3 text-indigo-600 font-bold">
-                            {hashtagExamples[i] ? `#${hashtagExamples[i].replace("#", "")}` : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                      {hashtagExamples.slice(hashtagTypes.length).map((ex, i) => (
-                        <tr key={`ex-${i}`} className="hover:bg-slate-50 transition">
-                          <td className="px-5 py-3 text-slate-300">—</td>
-                          <td className="px-5 py-3 text-indigo-600 font-bold">#{ex.replace("#", "")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {[...hashtagTypes.map((t) => ({ isType: true, val: t })), ...hashtagExamples.map((e) => ({ isType: false, val: e }))].map(
-                    ({ isType, val }, i) => (
-                      <span
-                        key={i}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${
-                          isType ? "bg-slate-100 text-slate-700 border-slate-200" : "bg-indigo-50 text-indigo-600 border-indigo-100"
-                        }`}
-                      >
-                        {isType ? val : `#${val.replace("#", "")}`}
-                      </span>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 자주 쓴 해시태그 빈도 순위 */}
-      {topHashtags.length > 0 && (
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg">
-          <InfoHeadline>자주 쓴 해시태그 TOP {topHashtags.length}</InfoHeadline>
-          <div className="space-y-3">
-            {topHashtags.map(([tag, count], i) => (
-              <div key={tag} className="flex items-center gap-4">
-                <span className="w-6 text-xs font-black text-slate-400 text-right shrink-0">{i + 1}</span>
-                <span className="text-sm font-black text-indigo-600 w-40 shrink-0">{tag}</span>
-                <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
-                    style={{ width: `${(count / (topHashtags[0]?.[1] ?? 1)) * 100}%` }}
+            {summary && (
+              <div className="rounded-2xl bg-slate-900 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-white/40 mb-3">AI 브랜드 분석</p>
+                <p className="leading-loose">
+                  <KeywordText text={summary}
+                    keywords={summaryKeywords}
+                    baseClass="text-xs text-white/50"
+                    keyClass="text-base text-white"
                   />
-                </div>
-                <span className="text-xs font-black text-slate-500 w-12 text-right shrink-0">{count}회</span>
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* 소통 방식 & 커뮤니티 전략 */}
-      {(c.engagement_style?.interaction_methods?.length > 0 || c.engagement_style?.community_building) && (
-        <div className="bg-slate-900 p-10 lg:p-14 rounded-3xl shadow-2xl text-white">
-          <InfoHeadline className="text-white border-l-indigo-400 text-2xl">소통 방식 & 커뮤니티 전략</InfoHeadline>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {c.engagement_style?.interaction_methods?.length > 0 && (
+            {(keyPatterns ?? []).length > 0 && (
               <div>
-                <DataLabel className="text-slate-500">팔로워 소통 유도 방식</DataLabel>
-                <ul className="space-y-4 mt-3">
-                  {c.engagement_style.interaction_methods.map((m: string, i: number) => (
-                    <li key={i} className="flex items-start gap-4 text-base text-slate-200 font-medium leading-relaxed">
-                      <span className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-xs font-black shrink-0 mt-0.5">{i + 1}</span>
-                      {m}
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-3">핵심 패턴</p>
+                <ul className="space-y-2.5">
+                  {(keyPatterns ?? []).slice(0, 3).map((p: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <span className="text-[9px] font-black bg-slate-900 text-white w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                      <p className="text-xs text-slate-600 leading-relaxed">{p}</p>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            {c.engagement_style?.community_building && (
-              <div>
-                <DataLabel className="text-slate-500">커뮤니티 형성 전략</DataLabel>
-                <p className="text-lg text-white font-medium leading-relaxed bg-white/5 p-6 rounded-2xl border border-white/10 mt-3">
-                  {c.engagement_style.community_building}
-                </p>
-              </div>
-            )}
           </div>
+        </section>
+      )}
+
+      {/* ② AI 풀 쿼트 — 매거진 에디토리얼 스타일 */}
+      {summary && (
+        <section className="border-y border-slate-100 py-14">
+          <span className="text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-8 inline-block"
+            style={{ background: "#5E81F415", color: "#5E81F4" }}>
+            AI Analysis
+          </span>
+          <p className="text-[100px] font-black text-slate-100 leading-none select-none -mb-6">&ldquo;</p>
+          <p className="max-w-4xl leading-loose">
+            <KeywordText text={summary}
+              keywords={summaryKeywords}
+              baseClass="text-xl text-slate-500"
+              keyClass="text-3xl text-slate-900"
+            />
+          </p>
+        </section>
+      )}
+
+      {/* ③ 인게이지먼트 차트 + 데이터 해석 */}
+      {posts.length > 0 && (
+        <section>
+          <SectionHeader tag="Engagement Data" title="게시물별 좋아요 추이" tagColor="#16B1FF" />
+          <div className="grid grid-cols-[1fr_220px] gap-8 items-start">
+            <div className="h-56">
+              <Bar data={engData} options={{
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.raw.toLocaleString()} 좋아요` } },
+                },
+                scales: {
+                  y: { beginAtZero: true, grid: { color: "#F8FAFC" }, ticks: { font: { size: 10 }, color: "#94A3B8" } },
+                  x: { grid: { display: false }, ticks: { font: { size: 10 }, color: "#94A3B8" } },
+                },
+              }} />
+            </div>
+            <div className="space-y-4">
+              {[
+                { label: "최고", value: fmt(sortedByLikes[0]?.likes_count ?? 0), sub: sortedByLikes[0]?.is_reel ? "릴스" : sortedByLikes[0]?.is_carousel ? "캐러셀" : "단일", color: "#5E81F4" },
+                { label: "평균", value: fmt(avgLikes), sub: `${posts.length}개 기준`, color: "#16B1FF" },
+                { label: "최저", value: fmt(sortedByLikes[sortedByLikes.length - 1]?.likes_count ?? 0), sub: "편차 참고", color: "#CBD5E1" },
+              ].map(({ label, value, sub, color }) => (
+                <div key={label} className="py-3 border-b border-slate-100 last:border-0">
+                  <p className="text-xs font-bold text-slate-600 mb-1">{label}</p>
+                  <p className="text-4xl font-black text-slate-900 leading-none">{value}</p>
+                  <p className="text-xs text-slate-500 mt-1">{sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-5 mt-4 justify-end">
+            {[{ color: "#16B1FF", label: "릴스" }, { color: "#5E81F4", label: "캐러셀" }, { color: "#CBD5E1", label: "단일" }].map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                <span className="text-xs text-slate-400">{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Visual Tab ─────────────────────────────────────────────────
+
+function PaletteSwatch({ color, index }: { color: string; index: number }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      className="flex-1 relative transition-all duration-300 cursor-default"
+      style={{ background: color }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {hovered && (
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] font-black px-2 py-1 rounded-lg whitespace-nowrap z-10 backdrop-blur-sm">
+          {color.toUpperCase()}
         </div>
       )}
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 탭 4: 종합 리포트 & SWOT
-// ────────────────────────────────────────────────────────────
+function VisualTab({ v, posts }: { v: any; posts: any[] }) {
+  const palette = v.feed_tone?.palette ?? "";
+  const paletteColors = getPaletteColors(palette);
+  const score = v.visual_identity?.score ?? null;
 
-function StrategyPane({ r }: { r: any }) {
-  const swot = r.swot ?? {};
+  const reels = posts.filter((p: any) => p.is_reel);
+  const carousels = posts.filter((p: any) => p.is_carousel);
+  const singles = posts.filter((p: any) => !p.is_reel && !p.is_carousel);
+  const avg = (arr: any[]) => arr.length ? Math.round(arr.reduce((a, p) => a + (p.likes_count ?? 0), 0) / arr.length) : 0;
+
+  const formatData = {
+    labels: [`릴스 (${reels.length})`, `캐러셀 (${carousels.length})`, `단일 (${singles.length})`],
+    datasets: [{
+      data: [avg(reels), avg(carousels), avg(singles)],
+      backgroundColor: ["#16B1FF", "#5E81F4", "#CBD5E1"],
+      borderRadius: 6, borderWidth: 0, maxBarThickness: 40,
+    }],
+  };
+
+  const donutData = {
+    labels: ["릴스", "캐러셀", "단일"],
+    datasets: [{
+      data: [reels.length, carousels.length, singles.length],
+      backgroundColor: ["#16B1FF", "#5E81F4", "#CBD5E1"],
+      borderWidth: 0,
+    }],
+  };
 
   return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="04" sub="Synthesis & Action Strategy" title="종합 분석 및 실행 전략" />
+    <div className="space-y-20 pt-12">
 
-      {/* 3대 전략 카드 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {[
-          { title: "콘텐츠 전략", items: r.content_strategy, accentBorder: "border-t-indigo-500", labelColor: "text-indigo-600", leftBorder: "border-l-indigo-600" },
-          { title: "브랜딩 전략", items: r.branding, accentBorder: "border-t-purple-500", labelColor: "text-purple-600", leftBorder: "border-l-purple-600" },
-          { title: "성장 전략", items: r.growth_strategy, accentBorder: "border-t-teal-500", labelColor: "text-teal-600", leftBorder: "border-l-teal-600" },
-        ].map((sec, idx) => (
-          <div key={idx} className={`bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] ${sec.accentBorder}`}>
-            <h4 className={`pl-4 border-l-4 ${sec.leftBorder} font-black text-lg mb-8 uppercase tracking-wider ${sec.labelColor}`}>{sec.title}</h4>
-            <div className="space-y-4">
-              {sec.items &&
-                Object.entries(sec.items).map(([k, v]: [string, any], i) => {
-                  const koLabel: Record<string, string> = {
-                    primary_format: "주력 포맷", posting_frequency: "업로드 주기", content_mix: "콘텐츠 믹스",
-                    hook_style: "첫 줄 훅 전략", cta_pattern: "행동 유도 방식", hashtag_use: "해시태그 활용",
-                    visual_identity: "비주얼 정체성", tone_of_voice: "브랜드 화법", differentiation: "차별화 포인트",
-                    target_audience: "타겟 오디언스", unique_value: "고유 가치",
-                    short_term: "단기 전략", long_term: "중장기 전략", collaboration: "협업 전략",
-                    engagement_tactics: "참여 유도 전술", growth_tactics: "성장 전술",
-                  };
-                  const label = koLabel[k] ?? k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                  const text = String(v ?? "");
-                  const firstSentence = text.split(/[.。]/)[0];
-                  const rest = text.split(/[.。]/).slice(1).join(".").trim();
-                  return (
-                    <div key={i} className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                      <span className="text-[10px] text-slate-400 font-black block mb-2 uppercase tracking-wider">{label}</span>
-                      <p className="text-sm font-black text-slate-900 leading-snug">{firstSentence}{firstSentence && "."}</p>
-                      {rest && <p className="text-xs text-slate-500 mt-1 leading-relaxed">{rest}</p>}
-                    </div>
-                  );
-                })}
+      {/* ① 비주얼 정체성 점수 + 요약 */}
+      {(score != null || v.summary) && (
+        <section>
+          <SectionHeader tag="Visual Identity" title="비주얼 정체성 분석" tagColor="#9698D6" />
+          <div className="flex items-start gap-12">
+            {score != null && (
+              <div className="shrink-0">
+                <p className="text-[110px] font-black leading-none text-slate-900">{score}</p>
+                <p className="text-lg font-bold text-slate-500 -mt-2">/ 10</p>
+              </div>
+            )}
+            <div className="pt-3">
+              {v.summary && (
+                <p className="leading-loose">
+                  <KeywordText text={v.summary}
+                    keywords={v.summary_keywords}
+                    baseClass="text-base text-slate-500"
+                    keyClass="text-xl text-slate-900"
+                  />
+                </p>
+              )}
+              {v.visual_identity?.recognizability && (
+                <p className="text-base text-slate-400 italic mt-5 border-l-4 border-slate-200 pl-5 leading-relaxed">
+                  &ldquo;{v.visual_identity.recognizability}&rdquo;
+                </p>
+              )}
             </div>
           </div>
-        ))}
-      </div>
+        </section>
+      )}
 
-      {/* SWOT — 다크 카드 + 레이더 차트 */}
-      <div className="bg-slate-900 p-10 lg:p-14 rounded-3xl shadow-2xl">
-        <h3 className="pl-4 border-l-4 border-indigo-500 font-black text-3xl text-white mb-12">SWOT 분석</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-center">
-          <div className="lg:col-span-1 bg-white/5 p-8 rounded-3xl border border-white/10 flex items-center justify-center aspect-square">
-            <SwotRadarChart swot={swot} />
+      {/* ② 팔레트 — 호버 hex, 텍스트는 아래 별도 */}
+      {palette && (
+        <section>
+          <SectionHeader tag="Color Palette" title={palette} tagColor="#F4BE5E" titleClass="text-2xl font-medium tracking-tight text-slate-900 leading-snug" />
+          <div className="flex h-56 rounded-2xl overflow-hidden shadow-sm">
+            {paletteColors.map((c, i) => (
+              <PaletteSwatch key={i} color={c} index={i} />
+            ))}
           </div>
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 text-white">
-            {[
-              { key: "strengths", label: "S", title: "Strength (강점)", color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" },
-              { key: "weaknesses", label: "W", title: "Weakness (약점)", color: "text-red-400", bg: "bg-red-500/20", border: "border-red-500/30" },
-              { key: "opportunities", label: "O", title: "Opportunity (기회)", color: "text-green-400", bg: "bg-green-500/20", border: "border-green-500/30" },
-              { key: "threats", label: "T", title: "Threat (위협)", color: "text-orange-400", bg: "bg-orange-500/20", border: "border-orange-500/30" },
-            ].map(({ key, label, title, color, bg, border }) => (
-              <div key={key} className={`bg-white/10 p-8 rounded-3xl border ${border}`}>
-                <span className={`${color} font-black text-xl mb-5 flex items-center gap-3`}>
-                  <span className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center text-sm font-black`}>{label}</span>
-                  {title}
-                </span>
-                <ol className="list-decimal pl-5 space-y-3 text-sm leading-relaxed text-slate-200">
-                  {(swot[key] ?? []).map((item: string, i: number) => {
-                    const parts = item.split(/[:：]/);
-                    return (
-                      <li key={i}>
-                        <span className="font-black text-white">{parts[0]}</span>
-                        {parts.length > 1 && <span className="font-medium text-slate-300">: {parts.slice(1).join(":")}</span>}
-                      </li>
-                    );
+          <div className="flex items-start gap-10 mt-6 flex-wrap">
+            {v.feed_tone?.saturation && (
+              <div className="shrink-0">
+                <p className="text-xs font-bold text-slate-600 mb-1">채도</p>
+                <div className="flex items-center gap-1 mb-1">
+                  {[1,2,3,4,5].map(i => {
+                    const level = /높|hig/i.test(v.feed_tone.saturation) ? 4 : /낮|low|des/i.test(v.feed_tone.saturation) ? 1 : /중|mid/i.test(v.feed_tone.saturation) ? 3 : 2;
+                    return <span key={i} className="w-2.5 h-2.5 rounded-full" style={{ background: i <= level ? "#9698D6" : "#E2E8F0" }} />;
                   })}
-                </ol>
+                </div>
+                <p className="text-sm font-bold text-slate-700">{v.feed_tone.saturation}</p>
+              </div>
+            )}
+            {v.feed_tone?.brightness && (
+              <div className="shrink-0">
+                <p className="text-xs font-bold text-slate-600 mb-1">밝기</p>
+                <div className="flex items-center gap-1 mb-1">
+                  {[1,2,3,4,5].map(i => {
+                    const level = /높|밝|hig|bri/i.test(v.feed_tone.brightness) ? 4 : /낮|어두|low|dar/i.test(v.feed_tone.brightness) ? 1 : /중|mid/i.test(v.feed_tone.brightness) ? 3 : 2;
+                    return <span key={i} className="w-2.5 h-2.5 rounded-full" style={{ background: i <= level ? "#F4BE5E" : "#E2E8F0" }} />;
+                  })}
+                </div>
+                <p className="text-sm font-bold text-slate-700">{v.feed_tone.brightness}</p>
+              </div>
+            )}
+            {v.feed_tone?.filter_consistency && (
+              <p className="text-sm text-slate-500 leading-relaxed flex-1">{v.feed_tone.filter_consistency}</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ③ 포맷별 대표 이미지 + 차트 */}
+      {posts.length > 0 && (
+        <section>
+          <SectionHeader tag="Content Format" title="포맷별 성과 비교" tagColor="#16B1FF" />
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            {[
+              { label: "릴스", items: reels, color: "#16B1FF", bg: "#EFF8FF" },
+              { label: "캐러셀", items: carousels, color: "#5E81F4", bg: "#EEF2FF" },
+              { label: "단일 이미지", items: singles, color: "#8181A5", bg: "#F5F5FA" },
+            ].map(({ label, items, color, bg }) => {
+              const sample = items[0];
+              return (
+                <div key={label} className="rounded-2xl overflow-hidden bg-slate-50">
+                  <div className="h-36 relative" style={{ background: bg }}>
+                    <PostImg src={sample?.image_urls?.[0]} className="w-full h-full" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <p className="text-white font-black text-xs">{label}</p>
+                      <p className="font-black text-lg leading-none" style={{ color }}>{items.length}개</p>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-xs font-bold text-slate-600 mb-1">평균 좋아요</p>
+                    <p className="text-3xl font-black text-slate-900">{fmt(avg(items))}</p>
+                    {items.length > 0 && (
+                      <p className="text-xs text-slate-400 mt-1">최고 {fmt(Math.max(...items.map((p: any) => p.likes_count ?? 0)))}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-[1fr_240px] gap-6">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-3">포맷별 평균 좋아요</p>
+              <div className="h-44">
+                <Bar data={formatData} options={{
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx: any) => ` 평균 ${ctx.raw.toLocaleString()} 좋아요` } } },
+                  scales: {
+                    y: { beginAtZero: true, grid: { color: "#F8FAFC" }, ticks: { font: { size: 10 }, color: "#94A3B8" } },
+                    x: { grid: { display: false }, ticks: { font: { size: 11, weight: "bold" as const }, color: "#1E293B" } },
+                  },
+                }} />
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-3">포맷 분포</p>
+              <div className="h-44">
+                <Doughnut data={donutData} options={{
+                  cutout: "65%", responsive: true, maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: true, position: "bottom" as const, labels: { boxWidth: 8, padding: 10, font: { size: 11 }, color: "#475569" } },
+                    tooltip: { callbacks: { label: (ctx: any) => ` ${ctx.raw}개` } },
+                  },
+                }} />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ④ 구도 & 피사체 — 이미지 3개 정상 비율 */}
+      {(v.composition || v.content_types) && (
+        <section>
+          <SectionHeader tag="Composition" title="구도 & 콘텐츠 유형" tagColor="#7CE7AC" />
+          <div className="grid grid-cols-[1fr_1fr] gap-8 items-start">
+            <div className="grid grid-cols-3 gap-2 h-[300px]">
+              {[posts[0], posts[1], posts[2]].map((p, i) => (
+                <div key={i} className="rounded-xl overflow-hidden bg-slate-100 h-full">
+                  <PostImg src={p?.image_urls?.[0]} className="w-full h-full" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-5">
+              {v.composition?.dominant_patterns?.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-2">주요 구도 패턴</p>
+                  <div className="flex flex-wrap gap-2">
+                    {v.composition.dominant_patterns.map((p: string, i: number) => (
+                      <span key={i} className="text-xs font-bold px-3 py-1.5 bg-slate-900 text-white rounded-xl">{p}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {v.composition?.whitespace && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1">여백 활용</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">{v.composition.whitespace}</p>
+                </div>
+              )}
+              {v.content_types?.primary_subjects?.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-2">주요 피사체</p>
+                  <div className="flex flex-wrap gap-2">
+                    {v.content_types.primary_subjects.map((s: string, i: number) => (
+                      <span key={i} className="text-xs font-bold px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {v.content_types?.person_frequency && (
+                <p className="text-sm text-slate-600 leading-relaxed border-l-2 border-slate-200 pl-3">{v.content_types.person_frequency}</p>
+              )}
+              {v.visual_identity?.recognizability && (
+                <p className="text-sm text-slate-400 italic leading-relaxed">&ldquo;{v.visual_identity.recognizability}&rdquo;</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ⑤ 그리드 전략 */}
+      {v.grid_strategy?.pattern_description && (
+        <section>
+          <SectionHeader tag="Grid Strategy" title="그리드 전략" tagColor="#5E81F4" />
+          <div className="flex items-start gap-5">
+            <div className="w-16 h-16 bg-slate-50 rounded-xl p-1.5 grid grid-cols-3 gap-0.5 shrink-0 border border-slate-200">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className={`rounded-sm ${i === 4 ? "bg-slate-900" : "bg-slate-200"}`} />
+              ))}
+            </div>
+            <div>
+              <span className={`inline-block text-[10px] font-black uppercase px-2.5 py-1 rounded-full mb-2 ${
+                v.grid_strategy?.has_pattern ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"
+              }`}>
+                {v.grid_strategy?.has_pattern ? "패턴 있음" : "자유 구성"}
+              </span>
+              <p className="text-sm text-slate-700 leading-relaxed">{v.grid_strategy.pattern_description}</p>
+            </div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Caption Tab ────────────────────────────────────────────────
+
+function CaptionTab({ c, posts }: { c: any; posts: any[] }) {
+  const categories: { name: string; percentage: number }[] = c.content_categories?.categories ?? [];
+  const colorMap: Record<string, string> = {
+    교육형: "#16B1FF", 감성형: "#5E81F4", 소통형: "#56CA00", 정보형: "#8181A5", 프로모션형: "#F4BE5E",
+  };
+  const topThemes: string[] = c.content_categories?.top_themes ?? [];
+  const hashtagExamples: string[] = c.hashtag_strategy?.examples ?? [];
+  const hashtagTypes: string[] = c.hashtag_strategy?.types ?? [];
+
+  const hashtagFreq: Record<string, number> = {};
+  posts.forEach((p: any) => {
+    (p.hashtags ?? []).forEach((tag: string) => {
+      const t = tag.toLowerCase().replace(/^#/, "");
+      hashtagFreq[t] = (hashtagFreq[t] ?? 0) + 1;
+    });
+  });
+  const topHashtags = Object.entries(hashtagFreq).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const maxFreq = topHashtags[0]?.[1] ?? 1;
+  const topPost = [...posts].sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0))[0];
+
+  return (
+    <div className="space-y-20 pt-12">
+
+      {/* ① 최고 성과 캡션 카드(좌) + 캡션 전략(우) */}
+      {(topPost?.caption || c.summary) && (
+        <section>
+          <SectionHeader tag="Caption Strategy" title="캡션 전략 분석" tagColor="#5E81F4" />
+          <div className="grid grid-cols-[2fr_3fr] gap-12 items-start">
+            {topPost?.caption && (
+              <div className="rounded-2xl border border-slate-100 overflow-hidden bg-white shadow-sm flex flex-col">
+                <div className="aspect-[4/5] overflow-hidden">
+                  <PostImg src={topPost.image_urls?.[0]} className="w-full h-full object-cover" />
+                </div>
+                <div className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">최고 성과 캡션</span>
+                    <span className="text-sm font-black text-rose-500">♥ {fmt(topPost.likes_count)}</span>
+                  </div>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line line-clamp-8">{topPost.caption}</p>
+                </div>
+              </div>
+            )}
+            <div className="space-y-10">
+              {c.summary && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-2">전략 요약</p>
+                  <p className="leading-loose">
+                    <KeywordText text={c.summary}
+                      keywords={c.summary_keywords}
+                      baseClass="text-sm text-slate-500"
+                      keyClass="text-lg text-slate-900"
+                    />
+                  </p>
+                </div>
+              )}
+              {c.caption_strategy && (
+                <div className="space-y-10">
+                  {[
+                    { step: "01", label: "Hook", sublabel: "첫 줄 전략", value: c.caption_strategy.hook_style, color: "#5E81F4" },
+                    { step: "02", label: "CTA", sublabel: "행동 유도", value: c.caption_strategy.cta_pattern, color: "#7CE7AC" },
+                    { step: "03", label: "Format", sublabel: "단락 스타일", value: c.caption_strategy.formatting, color: "#F4BE5E" },
+                  ].filter(item => item.value).map(({ step, label, sublabel, value, color }) => (
+                    <div key={step} className="border-l-4 pl-5" style={{ borderColor: color }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-black text-white px-2 py-0.5 rounded" style={{ background: color }}>{step}</span>
+                        <span className="text-xs font-bold text-slate-600">{label} — {sublabel}</span>
+                      </div>
+                      <p className="text-base font-normal text-slate-900 leading-relaxed">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ② 카테고리 분포 + 주력 테마 */}
+      {(categories.length > 0 || topThemes.length > 0) && (
+        <section>
+          <SectionHeader tag="Content Categories" title="카테고리 & 테마 분포" tagColor="#16B1FF" />
+          <div className="grid grid-cols-[3fr_2fr] gap-8 items-start">
+            {categories.length > 0 && (
+              <div className="space-y-4">
+                {categories.map((cat, i) => (
+                  <div key={i}>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <span className="text-sm font-bold text-slate-700">{cat.name}</span>
+                      <span className="text-3xl font-black text-slate-900 leading-none">{cat.percentage}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${cat.percentage}%`, backgroundColor: colorMap[cat.name] ?? "#8181A5" }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {topThemes.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-3">주력 테마</p>
+                <div className="flex flex-wrap gap-2">
+                  {topThemes.map((theme, i) => (
+                    <span key={i}
+                      className="text-sm font-black rounded-xl px-3 py-2 text-white"
+                      style={{ background: i === 0 ? "#1C1D21" : i === 1 ? "#334155" : "#64748B" }}
+                    >
+                      {theme}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ③ 해시태그 빈도 */}
+      {topHashtags.length > 0 && (
+        <section>
+          <SectionHeader tag="Hashtag Analysis" title={`자주 쓴 해시태그 TOP ${topHashtags.length}`} tagColor="#9698D6" />
+          <div className="space-y-2">
+            {topHashtags.map(([tag, freq]) => (
+              <div key={tag} className="flex items-center gap-2">
+                <div className="w-full relative h-7 bg-slate-100 rounded-lg overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 flex items-center px-4 rounded-xl"
+                    style={{
+                      width: `${Math.max((freq / maxFreq) * 100, 10)}%`,
+                      background: freq / maxFreq > 0.7 ? "#1C1D21" : freq / maxFreq > 0.4 ? "#334155" : "#E2E8F0",
+                    }}
+                  >
+                    <span className="text-xs font-black whitespace-nowrap" style={{ color: freq / maxFreq > 0.4 ? "white" : "#94A3B8" }}>
+                      #{tag}
+                    </span>
+                  </div>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{freq}회</span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* 벤치마킹 & 실행 권고 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {r.benchmarking && (
-          <div className="bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] p-10 rounded-3xl border border-slate-200">
-            <InfoHeadline className="mb-8">벤치마킹 인사이트</InfoHeadline>
-            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-xl">
-              {r.benchmarking.top_learnings?.map((l: string, i: number) => (
-                <div key={i} className={i > 0 ? "border-t border-slate-100 pt-6 mt-6" : ""}>
-                  <DataLabel className="text-indigo-600">인사이트 {i + 1}</DataLabel>
-                  <p className="text-base font-medium text-slate-700 leading-relaxed">{l}</p>
+          {hashtagTypes.length > 0 && (
+            <div className="mt-5 rounded-xl border border-slate-200 overflow-hidden">
+              {hashtagTypes.map((type, i) => (
+                <div key={i} className="flex items-center px-4 py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+                  <span className="text-sm font-bold text-slate-700 flex-1">{type}</span>
+                  {hashtagExamples[i] && <span className="text-sm font-bold text-blue-500">#{hashtagExamples[i].replace("#", "")}</span>}
                 </div>
               ))}
-              {r.benchmarking.actionable_tactics && (
-                <div className="border-t border-slate-100 pt-6 mt-6">
-                  <DataLabel className="text-indigo-600">즉시 실행 가능 전술</DataLabel>
-                  <p className="text-base font-medium text-slate-700 leading-relaxed">{r.benchmarking.actionable_tactics}</p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ④ 톤 & 소통 */}
+      {(c.tone_manner || c.engagement_style) && (
+        <section>
+          <SectionHeader tag="Brand Voice" title="톤 & 매너" tagColor="#7CE7AC" />
+          <div className="rounded-2xl overflow-hidden" style={{ background: "#1C1D21" }}>
+            <div className="grid grid-cols-2 divide-x divide-white/5">
+              {c.tone_manner && (
+                <div className="p-6">
+                  <p className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">말투 스타일</p>
+                  {c.tone_manner.speech_style && (
+                    <p className="text-2xl font-medium text-white leading-relaxed mb-6">&ldquo;{c.tone_manner.speech_style}&rdquo;</p>
+                  )}
+                  {c.tone_manner.emotional_keywords?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {c.tone_manner.emotional_keywords.map((k: string, i: number) => (
+                        <span key={i} className="text-xs font-bold px-2.5 py-1 bg-white/10 text-white/70 rounded-lg">{k}</span>
+                      ))}
+                    </div>
+                  )}
+                  {c.tone_manner.emoji?.types?.length > 0 && (
+                    <div className="flex gap-1 mt-3 text-lg">
+                      {c.tone_manner.emoji.types.map((t: string, i: number) => <span key={i}>{t}</span>)}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {r.recommendations && (
-          <div className="bg-indigo-50 p-10 rounded-3xl border border-indigo-100">
-            <InfoHeadline className="text-indigo-900 border-l-indigo-600 mb-8">Action Items — 실행 권고</InfoHeadline>
-            <div className="space-y-6">
-              {r.recommendations.immediate?.length > 0 && (
-                <div className="bg-white p-8 rounded-2xl border border-indigo-50 shadow-md">
-                  <span className="inline-block bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider mb-5">
-                    즉시 실행 — 이번 주 적용 가능
-                  </span>
-                  <ol className="space-y-5">
-                    {r.recommendations.immediate.map((t: string, i: number) => (
-                      <li key={i} className="flex items-start gap-4 text-base font-bold text-slate-800 leading-relaxed">
-                        <span className="w-10 h-10 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-base font-black shrink-0 mt-0.5">
-                          {i + 1}
-                        </span>
-                        {t}
+              {c.engagement_style?.interaction_methods?.length > 0 && (
+                <div className="p-6">
+                  <p className="text-xs font-black uppercase tracking-widest text-white/60 mb-4">팔로워 소통 유도</p>
+                  <ul className="space-y-3">
+                    {c.engagement_style.interaction_methods.map((m: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <span className="w-4 h-4 rounded bg-[#5E81F4] flex items-center justify-center text-[9px] font-black text-white shrink-0 mt-0.5">{i + 1}</span>
+                        <p className="text-xs text-white/60 leading-relaxed">{m}</p>
                       </li>
                     ))}
-                  </ol>
-                </div>
-              )}
-              {r.recommendations.long_term && (
-                <div className="bg-slate-900 p-8 rounded-2xl shadow-xl text-white">
-                  <span className="inline-block bg-slate-700 text-indigo-200 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider mb-5">
-                    중장기 방향 — 3~6개월
-                  </span>
-                  <p className="text-base font-medium leading-relaxed text-slate-200">{r.recommendations.long_term}</p>
+                  </ul>
                 </div>
               )}
             </div>
           </div>
-        )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Strategy Tab ───────────────────────────────────────────────
+
+function StrategyTab({ r }: { r: any }) {
+  const swot = r.swot ?? {};
+  const koLabel: Record<string, string> = {
+    primary_format: "주력 포맷", posting_frequency: "업로드 주기", content_mix: "콘텐츠 믹스",
+    hook_style: "첫 줄 훅", cta_pattern: "행동 유도", hashtag_use: "해시태그 활용",
+    visual_identity: "비주얼 정체성", tone_of_voice: "브랜드 화법", differentiation: "차별화 포인트",
+    target_audience: "타겟 오디언스", unique_value: "고유 가치",
+    short_term: "단기 전략", long_term: "중장기 전략", collaboration: "협업 전략",
+    engagement_tactics: "참여 유도", growth_tactics: "성장 전술",
+  };
+
+  const swotConfig = [
+    { key: "strengths", letter: "S", title: "강점", bg: "#F0FDF4", border: "#BBF7D0", text: "#15803D", accent: "#22C55E" },
+    { key: "weaknesses", letter: "W", title: "약점", bg: "#FFF7ED", border: "#FED7AA", text: "#C2410C", accent: "#F97316" },
+    { key: "opportunities", letter: "O", title: "기회", bg: "#EFF6FF", border: "#BFDBFE", text: "#1D4ED8", accent: "#3B82F6" },
+    { key: "threats", letter: "T", title: "위협", bg: "#FFF1F2", border: "#FECDD3", text: "#BE123C", accent: "#F43F5E" },
+  ];
+
+  const strategies = [
+    { title: "콘텐츠 전략", items: r.content_strategy, accent: "#5E81F4" },
+    { title: "브랜딩 전략", items: r.branding, accent: "#9698D6" },
+    { title: "성장 전략", items: r.growth_strategy, accent: "#7CE7AC" },
+  ].filter(s => s.items);
+
+  const hasSwot = swot.strengths?.length || swot.weaknesses?.length || swot.opportunities?.length || swot.threats?.length;
+
+  const radarData = {
+    labels: ["Strength", "Opportunity", "Weakness", "Threat"],
+    datasets: [{
+      data: [
+        Math.min((swot.strengths?.length ?? 0) * 3, 10) || 7,
+        Math.min((swot.opportunities?.length ?? 0) * 3, 10) || 6,
+        Math.min((swot.weaknesses?.length ?? 0) * 3, 10) || 4,
+        Math.min((swot.threats?.length ?? 0) * 3, 10) || 3,
+      ],
+      backgroundColor: "rgba(94,129,244,0.10)",
+      borderColor: "#5E81F4", borderWidth: 2,
+      pointBackgroundColor: "#5E81F4", pointRadius: 4,
+    }],
+  };
+
+  return (
+    <div className="space-y-20 pt-12">
+
+      {/* ① SWOT 2×2 */}
+      {hasSwot && (
+        <section>
+          <SectionHeader tag="Strategic Analysis" title="SWOT 분석" tagColor="#5E81F4" />
+          <div className="grid grid-cols-2 gap-3">
+            {swotConfig.map(({ key, letter, title, bg, border, text, accent }) => (
+              <div key={key} className="rounded-2xl p-7" style={{ background: bg, border: `1px solid ${border}` }}>
+                <div className="flex items-baseline gap-3 mb-5">
+                  <span className="text-7xl font-black leading-none" style={{ color: accent }}>{letter}</span>
+                  <span className="text-xl font-black" style={{ color: text }}>{title}</span>
+                </div>
+                <ul className="space-y-3">
+                  {(swot[key] ?? []).map((item: string, i: number) => {
+                    const parts = item.split(/[:：]/);
+                    return (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <div className="w-1 h-4 rounded-full shrink-0 mt-1" style={{ background: accent }} />
+                        <p className="text-sm leading-relaxed" style={{ color: text }}>
+                          {parts.length > 1 ? <><strong className="font-black">{parts[0]}</strong>: {parts.slice(1).join(":")}</> : item}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ② 레이더 + 액션 아이템 */}
+      {(hasSwot || r.recommendations?.immediate?.length) && (
+        <section className="grid grid-cols-[1fr_1.5fr] gap-10 items-start">
+          {hasSwot && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-4">SWOT 레이더</p>
+              <div className="h-80 bg-slate-50 rounded-2xl p-6">
+                <Radar data={radarData} options={{
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                  scales: {
+                    r: {
+                      beginAtZero: true, max: 10, ticks: { display: false },
+                      grid: { color: "#F1F5F9" }, angleLines: { color: "#E2E8F0" },
+                      pointLabels: { color: "#1E293B", font: { size: 11, weight: "bold" as const } },
+                    },
+                  },
+                }} />
+              </div>
+            </div>
+          )}
+          {r.recommendations?.immediate?.length > 0 && (
+            <div>
+              <SectionHeader tag="Action Items" title="이번 주 실행 아이템" tagColor="#7CE7AC" />
+              <ol className="space-y-5">
+                {r.recommendations.immediate.map((item: string, i: number) => (
+                  <li key={i} className="flex items-start gap-5">
+                    <span className="text-5xl font-black leading-none shrink-0" style={{ color: "#E2E8F0" }}>{String(i + 1).padStart(2, "0")}</span>
+                    <p className="text-base font-normal text-slate-800 leading-relaxed pt-2">{item}</p>
+                  </li>
+                ))}
+              </ol>
+              {r.recommendations.long_term && (
+                <div className="mt-5 rounded-2xl bg-slate-50 border border-slate-100 p-5">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-2">중장기 방향 (3~6개월)</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">{r.recommendations.long_term}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ③ 전략 카드 */}
+      {strategies.length > 0 && (
+        <section>
+          <SectionHeader tag="Strategy" title="실행 전략" tagColor="#9698D6" />
+          <div className="grid grid-cols-3 gap-4">
+            {strategies.map(({ title, items, accent }) => (
+              <div key={title} className="rounded-2xl border border-slate-100 overflow-hidden">
+                <div className="px-5 py-3" style={{ borderTop: `3px solid ${accent}` }}>
+                  <p className="text-xs font-black uppercase tracking-widest" style={{ color: accent }}>{title}</p>
+                </div>
+                <div className="p-4 space-y-2">
+                  {Object.entries(items).map(([k, v]: [string, any], i) => (
+                    <div key={i} className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-1">{koLabel[k] ?? k.replace(/_/g, " ")}</p>
+                      <p className="text-xs font-bold text-slate-800 leading-snug">{String(v ?? "").split(/[.。]/)[0]}.</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ④ 벤치마킹 */}
+      {r.benchmarking && (
+        <section>
+          <SectionHeader tag="Benchmark" title="벤치마킹 인사이트" tagColor="#F4BE5E" />
+          <div className="grid grid-cols-2 gap-6">
+            {r.benchmarking.top_learnings?.length > 0 && (
+              <div className="space-y-3">
+                {r.benchmarking.top_learnings.map((l: string, i: number) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-lg bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-500 shrink-0 mt-0.5">{i + 1}</span>
+                    <p className="text-sm text-slate-600 leading-relaxed">{l}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {r.benchmarking.actionable_tactics && (
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-2">즉시 실행 전술</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{r.benchmarking.actionable_tactics}</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Loading ────────────────────────────────────────────────────
+
+function LoadingState({ currentStep }: { currentStep: string }) {
+  const label: Record<string, string> = {
+    idle: "준비 중...",
+    scraping: "게시물 및 프로필 수집 중...",
+    analyzing: "비주얼 & 캡션 패턴 분석 중...",
+    generating_report: "최종 보고서 작성 중...",
+  };
+  const steps = [
+    { key: "scraping", label: "데이터 수집" },
+    { key: "analyzing", label: "AI 분석" },
+    { key: "generating_report", label: "보고서 생성" },
+  ];
+  const idx = steps.findIndex(s => s.key === currentStep);
+  return (
+    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-12 flex flex-col items-center gap-6">
+      <div className="w-10 h-10 rounded-full border-2 border-slate-200 border-t-slate-900 animate-spin" />
+      <div className="text-center">
+        <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-2">분석 진행 중</p>
+        <p className="text-sm font-bold text-slate-700">{label[currentStep] ?? "처리 중..."}</p>
+        <p className="text-xs text-slate-400 mt-1">1~2분 소요됩니다.</p>
+      </div>
+      <div className="flex gap-6">
+        {steps.map((step, i) => (
+          <div key={step.key} className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${i < idx ? "bg-slate-900" : i === idx ? "bg-blue-500 animate-pulse" : "bg-slate-200"}`} />
+            <span className={`text-xs font-bold ${i < idx ? "text-slate-900" : i === idx ? "text-slate-700" : "text-slate-300"}`}>{step.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 메인 컴포넌트
-// ────────────────────────────────────────────────────────────
+// ── Root ───────────────────────────────────────────────────────
 
 export default function ReportCard() {
   const { currentReport, error, isAnalyzing, currentStep } = useAnalysisStore();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
-  if (isAnalyzing) {
-    const stepLabel: Record<string, string> = {
-      idle: '준비 중...',
-      scraping: '게시물 및 프로필 데이터 수집 중...',
-      analyzing: '비주얼 & 캡션 패턴 분석 중...',
-      generating_report: '최종 인사이트 보고서 작성 중...',
-    };
-    return (
-      <div className="mt-8 p-10 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col items-center justify-center gap-6 min-h-[320px]">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin" />
-        </div>
-        <div className="text-center">
-          <p className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2">분석 진행 중</p>
-          <p className="text-base font-bold text-slate-800">{stepLabel[currentStep] ?? '처리 중...'}</p>
-          <p className="text-xs text-slate-400 mt-2">인스타그램 데이터 수집 및 AI 분석에 1~2분 소요됩니다.</p>
-        </div>
-        <div className="w-full max-w-xs flex flex-col gap-2 mt-2">
-          {(['scraping', 'analyzing', 'generating_report'] as const).map((step, i) => {
-            const steps = ['scraping', 'analyzing', 'generating_report'];
-            const currentIdx = steps.indexOf(currentStep);
-            const isDone = i < currentIdx;
-            const isActive = step === currentStep;
-            return (
-              <div key={step} className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${isDone ? 'bg-indigo-600' : isActive ? 'bg-indigo-400 animate-pulse' : 'bg-slate-200'}`} />
-                <span className={`text-xs font-bold ${isActive ? 'text-slate-800' : isDone ? 'text-indigo-500' : 'text-slate-300'}`}>
-                  {['데이터 수집', 'AI 분석', '보고서 생성'][i]}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+  if (isAnalyzing) return <LoadingState currentStep={currentStep} />;
 
   if (error) {
     return (
-      <div className="mt-8 p-8 rounded-3xl border border-red-200 bg-red-50">
-        <p className="text-xs font-black text-red-700 uppercase mb-1">Analysis Error</p>
-        <p className="text-sm text-red-600 font-medium">{error}</p>
+      <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-6">
+        <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">분석 오류</p>
+        <p className="text-sm text-slate-700 font-medium">{error}</p>
       </div>
     );
   }
@@ -1112,35 +1100,17 @@ export default function ReportCard() {
   const { profile, posts = [], visual_analysis: v = {}, caption_analysis: c = {} } = currentReport;
   const r = currentReport.report ?? {};
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "overview", label: "01 오버뷰" },
-    { key: "visual", label: "02 비주얼" },
-    { key: "caption", label: "03 캡션" },
-    { key: "strategy", label: "04 종합" },
-  ];
-
   return (
-    <div className="mt-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-wrap gap-2 mb-10 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm w-full overflow-x-auto scrollbar-hide">
-        {tabs.map((t) => (
-          <SubTabBtn
-            key={t.key}
-            active={activeTab === t.key}
-            onClick={() => {
-              setActiveTab(t.key);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            {t.label}
-          </SubTabBtn>
-        ))}
-      </div>
-
-      <div className="animate-in fade-in duration-700">
-        {activeTab === "overview" && <OverviewPane profile={profile} posts={posts} summary={r.summary} />}
-        {activeTab === "visual" && <VisualPane v={v} />}
-        {activeTab === "caption" && <CaptionPane c={c} posts={posts} />}
-        {activeTab === "strategy" && <StrategyPane r={r} />}
+    <div className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <ProfileHero profile={profile} posts={posts} />
+      <TabNav active={activeTab} onChange={setActiveTab} />
+      <div className="min-h-[400px]">
+        {activeTab === "overview" && (
+          <OverviewTab profile={profile} posts={posts} summary={r.summary} summaryKeywords={r.summary_keywords} keyPatterns={r.keyPatterns} />
+        )}
+        {activeTab === "visual" && <VisualTab v={v} posts={posts} />}
+        {activeTab === "caption" && <CaptionTab c={c} posts={posts} />}
+        {activeTab === "strategy" && <StrategyTab r={r} />}
       </div>
     </div>
   );

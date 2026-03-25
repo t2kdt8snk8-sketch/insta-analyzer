@@ -10,14 +10,21 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  PointElement,
+  ScatterController,
+  RadarController,
+  RadialLinearScale,
+  Filler,
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Doughnut, Bar } from 'react-chartjs-2';
+import { Doughnut, Bar, Scatter, Radar } from 'react-chartjs-2';
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, PointElement, ScatterController, RadarController, RadialLinearScale, Filler, Tooltip, Legend);
 
 type TrendTab = 'discovery' | 'deepdive' | 'synthesis' | 'execution';
+
+// ── Utils ──────────────────────────────────────────────────────
 
 function fmt(n: number) {
   if (!n) return '0';
@@ -26,55 +33,251 @@ function fmt(n: number) {
   return n.toLocaleString();
 }
 
-// ────────────────────────────────────────────────────────────
-// 공용 UI 컴포넌트
-// ────────────────────────────────────────────────────────────
+function getPaletteColors(palette: string): string[] {
+  const p = (palette ?? '').toLowerCase();
+  if (p.includes('웜') || p.includes('warm')) return ['#C8956A', '#D4A87A', '#E8C99A', '#B8852A'];
+  if (p.includes('쿨') || p.includes('cool') || p.includes('블루') || p.includes('blue')) return ['#6490B8', '#94B0C8', '#7C92AC', '#4A6890'];
+  if (p.includes('파스텔') || p.includes('pastel') || p.includes('핑크') || p.includes('pink')) return ['#F5C6D0', '#F5A0B0', '#E88090', '#FFC8D0'];
+  if (p.includes('모노') || p.includes('흑백') || p.includes('mono') || p.includes('다크') || p.includes('dark')) return ['#1A1A1A', '#555', '#AAA', '#E8E8E8'];
+  if (p.includes('팝') || p.includes('비비드') || p.includes('vivid')) return ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF'];
+  if (p.includes('그린') || p.includes('green') || p.includes('올리브')) return ['#4A7C59', '#78A86B', '#A8C89B', '#D4E8CC'];
+  if (p.includes('퍼플') || p.includes('purple') || p.includes('라벤더')) return ['#7C5C9A', '#A07CC0', '#C4A0E0', '#E0D0F5'];
+  if (p.includes('베이지') || p.includes('크림') || p.includes('어스') || p.includes('뉴트럴')) return ['#D4C4A8', '#C8B89A', '#E8DCC8', '#B8A88A'];
+  return ['#94A3B8', '#CBD5E1', '#E2E8F0', '#F1F5F9'];
+}
 
-function MagazineHeader({ num, sub, title }: { num: string; sub: string; title: string }) {
+const KO_STOPWORDS = new Set([
+  '그리고','하지만','또한','따라서','때문에','그러나','또는','그래서',
+  '있는','있으며','이며','이다','이고','가장','매우','특히','주로',
+  '전반적으로','상당히','통해','으로서','에서','에는','있어서','하고',
+  '합니다','됩니다','보입니다','활용','사용','보여','강조','구성',
+  '방식','스타일','느낌','분위기','계정','포스팅','일관성','전략',
+]);
+
+
+function KeywordText({
+  text, keywords = [],
+  baseClass = 'text-base text-slate-500 leading-relaxed',
+  keyClass = 'text-2xl text-slate-900 leading-tight',
+}: { text: string; keywords?: string[]; baseClass?: string; keyClass?: string }) {
+  if (!text) return null;
+  const kwSet = new Set(keywords.map(k => k.toLowerCase()));
   return (
-    <div className="mb-12">
-      <span className="block text-7xl leading-none font-black text-slate-100 tracking-tighter mb-1">{num}</span>
-      <span className="block text-xs font-black text-indigo-600 uppercase tracking-widest mb-3">{sub}</span>
-      <h2 className="text-4xl font-black text-slate-900">{title}</h2>
+    <>
+      {text.split(' ').map((word, i, arr) => {
+        const clean = word.replace(/[,.\!?:；。]/g, '').toLowerCase();
+        const isKeyword = kwSet.size > 0 && kwSet.has(clean);
+        return (
+          <span key={i} className={isKeyword ? keyClass : baseClass}>
+            {word}{i < arr.length - 1 ? ' ' : ''}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function SectionHeader({ tag, title, tagColor = '#5E81F4', titleClass }: {
+  tag: string; title: string; tagColor?: string; titleClass?: string;
+}) {
+  return (
+    <div className="mb-10">
+      <span
+        className="inline-block text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-4"
+        style={{ background: `${tagColor}15`, color: tagColor }}
+      >
+        {tag}
+      </span>
+      <h2 className={titleClass ?? 'text-4xl font-black tracking-tight text-slate-900 leading-tight'}>{title}</h2>
+      <div className="h-px bg-slate-100 mt-5" />
     </div>
   );
 }
 
-function InfoHeadline({ children, className }: { children: React.ReactNode; className?: string }) {
+function PostImg({ src, className }: { src?: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return <div className={`bg-slate-100 ${className ?? ''}`} />;
   return (
-    <h3 className={`pl-4 border-l-4 border-indigo-600 font-black text-xl text-slate-900 mb-6 ${className ?? ''}`}>
-      {children}
-    </h3>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" className={`object-cover ${className ?? ''}`}
+      referrerPolicy="no-referrer" onError={() => setFailed(true)} />
   );
 }
 
-function DataLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+// ── Tab Nav ────────────────────────────────────────────────────
+
+function TabNav({ active, onChange }: { active: TrendTab; onChange: (t: TrendTab) => void }) {
+  const tabs: { key: TrendTab; label: string }[] = [
+    { key: 'discovery', label: '탐색 & 요약' },
+    { key: 'deepdive', label: '심층 매트릭스' },
+    { key: 'synthesis', label: '패턴 종합' },
+    { key: 'execution', label: 'SWOT & 실행' },
+  ];
   return (
-    <span className={`block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 ${className ?? ''}`}>
-      {children}
-    </span>
+    <div className="flex border-b border-slate-200 mt-5">
+      {tabs.map(({ key, label }) => (
+        <button key={key}
+          onClick={() => { onChange(key); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          className={`px-5 py-3.5 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
+            active === key
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-function SubTabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+// ── Tab 1: Discovery ───────────────────────────────────────────
+
+function DiscoveryPane({ report, prompt, discoveryResult, analyzedData }: {
+  report: AgentReport; prompt: string; discoveryResult: any; analyzedData: any[];
+}) {
+  const summaryKeywords = report.summary_keywords ?? [];
   return (
-    <button
-      onClick={onClick}
-      className={`px-6 py-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-        active ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-      }`}
-    >
-      {children}
-    </button>
+    <div className="space-y-20 pt-12">
+
+      {/* ① AI 핵심 답변 — 에디토리얼 히어로 */}
+      <section>
+        <span
+          className="inline-block text-[11px] font-bold uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-6"
+          style={{ background: '#5E81F415', color: '#5E81F4' }}
+        >
+          AI Analysis — Trend Research
+        </span>
+        <p className="text-[100px] font-black text-slate-100 leading-none select-none -mb-6">&ldquo;</p>
+        <p className="text-slate-500 text-sm font-medium mb-4 italic">&quot;{prompt}&quot;</p>
+        <p className="max-w-4xl leading-loose">
+          <KeywordText
+            text={report.summary}
+            keywords={summaryKeywords}
+            baseClass="text-xl text-slate-500"
+            keyClass="text-3xl text-slate-900"
+          />
+        </p>
+      </section>
+
+      {/* ② 탐색 조건 */}
+      {discoveryResult && (
+        <section>
+          <SectionHeader tag="Discovery Criteria" title="리서치 탐색 조건" tagColor="#9698D6" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {discoveryResult.persona && (
+              <div className="rounded-2xl p-8" style={{ background: '#1C1D21' }}>
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-3">분석 페르소나</p>
+                <p className="text-xl font-black text-white leading-snug">&ldquo;{discoveryResult.persona}&rdquo;</p>
+              </div>
+            )}
+            {discoveryResult.analysis_criteria?.length > 0 && (
+              <div className="rounded-2xl border border-slate-100 p-8">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-5">핵심 분석 기준</p>
+                <ol className="space-y-4">
+                  {discoveryResult.analysis_criteria.map((c: string, i: number) => (
+                    <li key={i} className="flex items-start gap-4">
+                      <span className="text-4xl font-black leading-none shrink-0" style={{ color: '#E2E8F0' }}>
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <p className="text-base font-medium text-slate-700 leading-relaxed pt-2">{c}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ③ 분석 계정 카드 — 이미지 썸네일 포함 */}
+      {analyzedData.length > 0 && (
+        <section>
+          <SectionHeader tag="Analyzed Accounts" title={`분석 완료 계정 ${analyzedData.length}개`} tagColor="#16B1FF" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {analyzedData.map((acc: any, i: number) => {
+              const avgLikes = acc.posts?.length > 0
+                ? Math.round(acc.posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / acc.posts.length)
+                : 0;
+              const followers = acc.profile?.followers_count ?? 0;
+              const er = followers > 0 ? (avgLikes / followers * 100).toFixed(2) : '0.00';
+              const topPosts = [...(acc.posts ?? [])].sort((a: any, b: any) => (b.likes_count ?? 0) - (a.likes_count ?? 0)).slice(0, 3);
+              return (
+                <div key={i} className="rounded-2xl overflow-hidden border border-slate-100">
+                  {/* 썸네일 3장 — 4:5 비율로 세로 여유 확보 */}
+                  <div className="grid grid-cols-3 gap-0.5 bg-slate-100">
+                    {[0, 1, 2].map(j => (
+                      <div key={j} className="relative overflow-hidden bg-slate-100 aspect-[4/5]">
+                        <PostImg src={topPosts[j]?.image_urls?.[0]} className="absolute inset-0 w-full h-full" />
+                        {j === 0 && (
+                          <div className="absolute top-1.5 left-1.5 bg-yellow-400 text-yellow-900 text-[7px] font-black px-1.5 py-0.5 rounded uppercase">TOP</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {/* 프로필 정보 */}
+                  <div className="p-5" style={{ background: '#1C1D21' }}>
+                    <div className="flex items-center gap-3 mb-4">
+                      {/* 프로필 사진 */}
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-700 shrink-0">
+                        <PostImg src={acc.profile?.profile_image_url ?? acc.profile?.profile_pic_url} className="w-full h-full" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-black text-white truncate">@{acc.profile?.username}</p>
+                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-full shrink-0"
+                        style={{ background: '#5E81F415', color: '#5E81F4' }}>
+                        #{i + 1}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: '팔로워', value: fmt(followers), color: '#5E81F4' },
+                        { label: '평균 ♥', value: fmt(avgLikes), color: '#16B1FF' },
+                        { label: '참여율', value: `${er}%`, color: '#7CE7AC' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label}>
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-white/30 mb-0.5">{label}</p>
+                          <p className="text-lg font-black leading-none" style={{ color }}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 차트 컴포넌트
-// ────────────────────────────────────────────────────────────
+// ── Tab 2: Deep Dive ───────────────────────────────────────────
 
-function ToneDistributionChart({ analyzedData }: { analyzedData: any[] }) {
-  const counts: Record<string, number> = {};
+function DeepDivePane({ analyzedData }: { analyzedData: any[] }) {
+
+  // 포지셔닝 매트릭스 데이터
+  const points = analyzedData.map((acc: any) => {
+    const avgLikes = acc.posts?.length > 0
+      ? acc.posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / acc.posts.length : 0;
+    const followers = acc.profile?.followers_count ?? 0;
+    const er = followers > 0 ? parseFloat((avgLikes / followers * 100).toFixed(2)) : 0;
+    const vs = acc.visuals?.visual_identity?.score ?? 0;
+    return { x: vs, y: er, label: acc.profile?.username ?? '?' };
+  });
+
+  const scatterData = {
+    datasets: [{
+      label: '계정 포지셔닝',
+      data: points.map(p => ({ x: p.x, y: p.y })),
+      backgroundColor: points.map((_, i) => ['#5E81F4', '#16B1FF', '#7CE7AC', '#F4BE5E', '#9698D6', '#F87171'][i % 6]),
+      pointRadius: 12, pointHoverRadius: 15,
+    }],
+  };
+
+  // 톤 분포 도넛
+  const toneCounts: Record<string, number> = {};
   analyzedData.forEach((acc) => {
     const palette = (acc.visuals?.feed_tone?.palette ?? '기타').toLowerCase();
     const key = palette.includes('웜') ? '웜/저채도'
@@ -82,604 +285,480 @@ function ToneDistributionChart({ analyzedData }: { analyzedData: any[] }) {
       : palette.includes('파스텔') ? '파스텔톤'
       : palette.includes('팝') || palette.includes('비비드') ? '고채도/팝'
       : '기타';
-    counts[key] = (counts[key] ?? 0) + 1;
+    toneCounts[key] = (toneCounts[key] ?? 0) + 1;
   });
+  const toneData = {
+    labels: Object.keys(toneCounts),
+    datasets: [{ data: Object.values(toneCounts), backgroundColor: ['#C8956A', '#6490B8', '#F5C6D0', '#FF6B6B', '#94A3B8'], borderWidth: 0 }],
+  };
 
-  const labels = Object.keys(counts);
-  const data = {
-    labels,
+  // 포맷 분포
+  const formatArr = analyzedData.map((acc: any) => {
+    const posts = acc.posts ?? [];
+    const r = posts.filter((p: any) => p.is_reel).length;
+    const c = posts.filter((p: any) => !p.is_reel && p.is_carousel).length;
+    const s = posts.filter((p: any) => !p.is_reel && !p.is_carousel).length;
+    return { username: acc.profile?.username ?? '?', r, c, s };
+  });
+  const formatData = {
+    labels: formatArr.map(a => `@${a.username}`),
     datasets: [
-      {
-        data: Object.values(counts),
-        backgroundColor: ['#d97706', '#64748b', '#ec4899', '#6366f1', '#e2e8f0'],
-        borderWidth: 0,
-      },
+      { label: '릴스', data: formatArr.map(a => a.r), backgroundColor: '#16B1FF', borderRadius: 4 },
+      { label: '캐러셀', data: formatArr.map(a => a.c), backgroundColor: '#5E81F4', borderRadius: 4 },
+      { label: '단일', data: formatArr.map(a => a.s), backgroundColor: '#CBD5E1', borderRadius: 4 },
     ],
   };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '70%' as const,
-    plugins: {
-      legend: { position: 'right' as const, labels: { font: { size: 12 }, boxWidth: 12 } },
-      tooltip: { enabled: true },
-    },
-  };
 
-  return (
-    <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg">
-      <InfoHeadline className="text-center mb-8">비주얼 톤 분포</InfoHeadline>
-      <div className="w-full h-64 flex items-center justify-center">
-        <Doughnut data={data} options={options} />
-      </div>
-      <p className="text-center mt-6 text-xs font-bold text-slate-500 bg-slate-50 py-3 rounded-xl border border-slate-100">
-        {labels[0] ? `${labels[0]}(${Math.round((Object.values(counts)[0] / analyzedData.length) * 100)}%)가 시장 트렌드 주도 중` : '톤 분포 분석 완료'}
-      </p>
-    </div>
-  );
-}
-
-function FormatDistributionChart({ analyzedData }: { analyzedData: any[] }) {
-  let carousel = 0, reels = 0, single = 0, count = 0;
-  analyzedData.forEach((acc) => {
-    const ratio = acc.visuals?.grid_strategy?.content_ratio ?? {};
-    if (ratio.carousel != null || ratio.reels != null || ratio.single_image != null) {
-      carousel += ratio.carousel ?? 0;
-      reels += ratio.reels ?? 0;
-      single += ratio.single_image ?? 0;
-      count++;
-    }
+  // 인게이지먼트 순위 계산
+  const statsArr = analyzedData.map((acc: any) => {
+    const avgLikes = acc.posts?.length > 0
+      ? acc.posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / acc.posts.length : 0;
+    const followers = acc.profile?.followers_count ?? 0;
+    const er = followers > 0 ? parseFloat((avgLikes / followers * 100).toFixed(2)) : 0;
+    const vs = acc.visuals?.visual_identity?.score ?? 0;
+    return { er, vs };
   });
-  const total = carousel + reels + single;
-  const vals = total > 0
-    ? [Math.round((carousel / total) * 100), Math.round((reels / total) * 100), Math.round((single / total) * 100)]
-    : [33, 33, 34];
-
-  const data = {
-    labels: ['카루셀(다중)', '릴스(숏폼)', '단일 이미지'],
-    datasets: [
-      {
-        data: vals,
-        backgroundColor: ['#4f46e5', '#14b8a6', '#cbd5e1'],
-        borderRadius: 8,
-      },
-    ],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true },
-    },
-    scales: {
-      y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 } } },
-      x: { grid: { display: false }, ticks: { font: { size: 12, weight: 'bold' as const } } },
-    },
-  };
+  const erRanks = statsArr.map(s => statsArr.filter(o => o.er > s.er).length + 1);
+  const vsRanks = statsArr.map(s => statsArr.filter(o => o.vs > s.vs).length + 1);
 
   return (
-    <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg">
-      <InfoHeadline className="text-center mb-8">주력 포맷 점유율</InfoHeadline>
-      <div className="w-full h-64 flex items-center justify-center">
-        <Bar data={data} options={options} />
-      </div>
-      <p className="text-center mt-6 text-xs font-bold text-slate-500 bg-slate-50 py-3 rounded-xl border border-slate-100">
-        {vals[0] >= vals[1] && vals[0] >= vals[2]
-          ? `카루셀(${vals[0]}%) 스토리텔링형 강세`
-          : vals[1] >= vals[2]
-          ? `릴스(${vals[1]}%) 숏폼 콘텐츠 주도`
-          : `단일 이미지(${vals[2]}%) 중심`}
-      </p>
-    </div>
-  );
-}
+    <div className="space-y-20 pt-12">
 
-// ────────────────────────────────────────────────────────────
-// 탭 1: 탐색 및 요약 (Discovery)
-// ────────────────────────────────────────────────────────────
-
-function DiscoveryPane({
-  report,
-  prompt,
-  discoveryResult,
-  analyzedData,
-}: {
-  report: AgentReport;
-  prompt: string;
-  discoveryResult: any;
-  analyzedData: any[];
-}) {
-  return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="STEP 1" sub="Discovery & Persona" title="리서치 탐색 조건 및 전체 요약" />
-
-      {/* 핵심 답변 히어로 */}
-      <div className="bg-gradient-to-br from-slate-900 to-indigo-900 p-12 lg:p-16 rounded-3xl text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute right-0 bottom-0 w-[500px] h-[500px] bg-indigo-500 rounded-full mix-blend-screen filter blur-[100px] opacity-30 pointer-events-none" />
-        <span className="bg-white/10 border border-white/20 text-[10px] px-4 py-2 rounded-full font-bold uppercase tracking-wider mb-8 inline-block relative z-10">
-          질문에 대한 핵심 답변
-        </span>
-        <h3 className="text-2xl md:text-3xl font-black mb-6 leading-tight relative z-10 text-indigo-50 mt-4">
-          "{prompt}"
-        </h3>
-        <p className="text-lg text-indigo-100 leading-relaxed max-w-4xl relative z-10 font-medium">
-          {report.summary}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* 탐색 조건 */}
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-lg border-t-[8px] border-t-indigo-500">
-          <InfoHeadline>탐색 조건 (Discovery Criteria)</InfoHeadline>
-          <div className="space-y-8">
-            {discoveryResult?.persona && (
-              <div>
-                <DataLabel>분석 페르소나 정의</DataLabel>
-                <p className="text-xl font-black text-slate-900 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                  "{discoveryResult.persona}"
-                </p>
-              </div>
-            )}
-            {discoveryResult?.analysis_criteria?.length > 0 && (
-              <div>
-                <DataLabel>핵심 분석 기준</DataLabel>
-                <ul className="text-base text-slate-700 font-bold space-y-4">
-                  {discoveryResult.analysis_criteria.map((c: string, i: number) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm shrink-0">
-                        {i + 1}
-                      </span>
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      {/* ① 포지셔닝 매트릭스 — 전체 너비 */}
+      {analyzedData.length >= 2 && (
+        <section>
+          <SectionHeader tag="Positioning Matrix" title="비주얼 점수 vs 인게이지먼트율" tagColor="#5E81F4" />
+          <p className="text-sm text-slate-400 -mt-6 mb-8">우상단: 비주얼도 강하고 성과도 높음 / 좌상단: 비주얼은 평범하지만 팬덤 강함</p>
+          <div className="rounded-2xl bg-slate-50 p-8 h-96">
+            <Scatter data={scatterData} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx: any) => `@${points[ctx.dataIndex].label}  비주얼 ${points[ctx.dataIndex].x}점 / 참여율 ${points[ctx.dataIndex].y}%` } },
+              },
+              scales: {
+                x: { title: { display: true, text: '비주얼 아이덴티티 점수 (0~10)', font: { size: 12 } }, min: 0, max: 10, grid: { color: '#F1F5F9' } },
+                y: { title: { display: true, text: '인게이지먼트율 (%)', font: { size: 12 } }, min: 0, grid: { color: '#F1F5F9' } },
+              },
+            }} />
           </div>
-        </div>
-
-        {/* 분석 완료 계정 */}
-        <div className="bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] p-10 rounded-3xl border border-slate-200">
-          <InfoHeadline>관련 계정 추천 및 분석 완료</InfoHeadline>
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg">
-            <ul className="space-y-3 text-sm font-medium">
-              {analyzedData.map((acc: any, i: number) => (
-                <li
-                  key={i}
-                  className={`flex justify-between items-center px-5 py-4 rounded-xl ${
-                    i === 0 ? 'bg-indigo-50 text-indigo-900 border border-indigo-100' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <span className={`font-black ${i === 0 ? 'text-lg' : 'text-slate-800'}`}>
-                    {i + 1}. @{acc.profile?.username}
-                  </span>
-                  <span className={`font-bold text-xs ${i === 0 ? 'bg-white px-3 py-1.5 rounded-lg shadow-sm border border-indigo-100' : 'text-slate-500'}`}>
-                    {acc.profile?.followers_count ? fmt(acc.profile.followers_count) : '-'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-              <span className="inline-block bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-full">
-                총 {analyzedData.length}개 계정 데이터 병합 분석 완료
+          <div className="flex flex-wrap gap-2 mt-4">
+            {points.map((p, i) => (
+              <span key={i} className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 text-slate-600">
+                @{p.label} — 비주얼 {p.x}pt / 참여율 {p.y}%
               </span>
-            </div>
+            ))}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────
-// 탭 2: 심층 매트릭스 (Deep Dive)
-// ────────────────────────────────────────────────────────────
-
-function DeepDivePane({ analyzedData }: { analyzedData: any[] }) {
-  return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="STEP 2" sub="Deep Dive & Cross Matrix" title="계정별 심층 분석 데이터 및 매트릭스" />
-
-      {/* 차트 2개 */}
-      {analyzedData.length > 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ToneDistributionChart analyzedData={analyzedData} />
-          <FormatDistributionChart analyzedData={analyzedData} />
-        </div>
+        </section>
       )}
 
-      {/* 교차 분석 테이블 */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-lg overflow-hidden">
-        <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-          <InfoHeadline className="mb-0 text-xl">주요 계정 교차 분석 매트릭스</InfoHeadline>
-          <span className="text-[10px] font-bold text-white bg-slate-900 px-3 py-1.5 rounded-lg">
-            {analyzedData.length} SAMPLES
-          </span>
-        </div>
-        <div className="overflow-x-auto p-4">
-          <table className="w-full text-left text-sm text-slate-700 min-w-[900px]">
-            <thead className="text-[11px] text-slate-500 uppercase bg-white border-b-2 border-slate-200">
-              <tr>
-                <th className="px-8 py-5 font-black">계정명</th>
-                <th className="px-8 py-5 font-black">메인 팔레트</th>
-                <th className="px-8 py-5 font-black">텍스트 오버레이</th>
-                <th className="px-8 py-5 font-black">1순위 포맷</th>
-                <th className="px-8 py-5 font-black">아이덴티티 점수</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {analyzedData.map((acc: any, i: number) => {
-                const v = acc.visuals ?? {};
-                const score = v.visual_identity?.score;
-                const palette = v.feed_tone?.palette ?? '—';
-                const textOverlay = v.composition?.text_overlay ?? '—';
-                const ratio = v.grid_strategy?.content_ratio ?? {};
-                const topFormat =
-                  (ratio.carousel ?? 0) >= (ratio.reels ?? 0) && (ratio.carousel ?? 0) >= (ratio.single_image ?? 0)
-                    ? `카루셀 (${ratio.carousel}%)`
-                    : (ratio.reels ?? 0) >= (ratio.single_image ?? 0)
-                    ? `릴스 (${ratio.reels}%)`
-                    : `단일 (${ratio.single_image ?? 0}%)`;
-
-                return (
-                  <tr key={i} className="hover:bg-slate-50 transition">
-                    <td className="px-8 py-6 font-black text-indigo-600 text-base">@{acc.profile?.username}</td>
-                    <td className="px-8 py-6">
-                      <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-lg text-xs font-bold leading-tight inline-block max-w-[160px]">
-                        {palette}
-                      </span>
-                    </td>
-                    <td className="px-8 py-6 text-xs text-slate-600 leading-relaxed max-w-[200px]">
-                      {textOverlay.length > 50 ? textOverlay.slice(0, 50) + '…' : textOverlay}
-                    </td>
-                    <td className="px-8 py-6 text-xs font-bold">{topFormat}</td>
-                    <td className="px-8 py-6">
-                      {score != null ? (
-                        <div className="flex items-center gap-3">
-                          <span className="font-black text-lg w-6">{score}</span>
-                          <div className="w-32 bg-slate-200 h-3 rounded-full overflow-hidden">
-                            <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${score * 10}%` }} />
-                          </div>
-                        </div>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 계정별 캡션 전략 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {analyzedData.map((acc: any, i: number) => {
-          const c = acc.captions ?? {};
-          const avgLikes =
-            acc.posts?.length > 0
-              ? Math.round(acc.posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / acc.posts.length)
-              : null;
-          return (
-            <div key={i} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 bg-indigo-50 text-indigo-700 rounded-xl flex items-center justify-center font-black text-sm">{i + 1}</span>
-                  <span className="font-black text-slate-900 text-base">@{acc.profile?.username}</span>
-                </div>
-                {avgLikes != null && (
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
-                    평균 ♥ {fmt(avgLikes)}
-                  </span>
-                )}
+      {/* ② 톤 분포 + 포맷별 현황 */}
+      {analyzedData.length > 1 && (
+        <section>
+          <SectionHeader tag="Visual & Format Analysis" title="비주얼 톤 분포 & 포맷 현황" tagColor="#F4BE5E" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-4">색감 톤 분포</p>
+              <div className="h-64 bg-slate-50 rounded-2xl p-6">
+                <Doughnut data={toneData} options={{
+                  responsive: true, maintainAspectRatio: false, cutout: '65%',
+                  plugins: { legend: { position: 'right', labels: { font: { size: 12 }, boxWidth: 10, padding: 12 } }, tooltip: { enabled: true } },
+                }} />
               </div>
-              {c.tone_manner?.speech_style && (
-                <div className="mb-4">
-                  <DataLabel>말투 스타일</DataLabel>
-                  <span className="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-100 inline-block">
-                    {c.tone_manner.speech_style}
-                  </span>
-                </div>
-              )}
-              {c.caption_strategy?.hook_style && (
-                <div className="mb-4">
-                  <DataLabel>훅 전략</DataLabel>
-                  <p className="text-xs text-slate-600 leading-relaxed">{c.caption_strategy.hook_style}</p>
-                </div>
-              )}
-              {c.caption_strategy?.cta_pattern && (
-                <div className="mb-4">
-                  <DataLabel>CTA 패턴</DataLabel>
-                  <p className="text-xs text-slate-600 leading-relaxed">{c.caption_strategy.cta_pattern}</p>
-                </div>
-              )}
-              {c.content_categories?.top_themes?.length > 0 && (
-                <div className="mb-4">
-                  <DataLabel>주력 테마</DataLabel>
-                  <div className="flex flex-wrap gap-1.5">
-                    {c.content_categories.top_themes.map((t: string, j: number) => (
-                      <span key={j} className="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100">
-                        {t}
-                      </span>
-                    ))}
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-4">계정별 포맷 구성</p>
+              <div className="h-64 bg-slate-50 rounded-2xl p-6">
+                <Bar data={formatData} options={{
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, font: { size: 11 } } } },
+                  scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
+                    y: { stacked: true, grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
+                  },
+                }} />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ③ 계정별 상세 카드 */}
+      <section>
+        <SectionHeader tag="Account Deep Dive" title="계정별 상세 분석" tagColor="#16B1FF" />
+        <div className="space-y-8">
+          {analyzedData.map((acc: any, i: number) => {
+            const posts = acc.posts ?? [];
+            const avgLikes = posts.length > 0
+              ? Math.round(posts.reduce((a: number, p: any) => a + (p.likes_count ?? 0), 0) / posts.length) : 0;
+            const followers = acc.profile?.followers_count ?? 0;
+            const er = followers > 0 ? (avgLikes / followers * 100).toFixed(2) : '0.00';
+            const topPosts = [...posts].sort((a: any, b: any) => (b.likes_count ?? 0) - (a.likes_count ?? 0)).slice(0, 6);
+            const palette = acc.visuals?.feed_tone?.palette ?? '';
+            const paletteColors = getPaletteColors(palette);
+            const score = acc.visuals?.visual_identity?.score;
+
+            return (
+              <div key={i} className="rounded-2xl border border-slate-100 overflow-hidden">
+                {/* 헤더 — 다크 */}
+                <div className="px-8 pt-7 pb-5 grid grid-cols-[1fr_auto] gap-4 items-center" style={{ background: '#1C1D21' }}>
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-2xl font-black text-white">@{acc.profile?.username}</h3>
+                      {acc.profile?.is_verified && (
+                        <span className="text-[9px] font-black bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full uppercase">인증</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-6">
+                      {[
+                        { label: '팔로워', value: fmt(followers), color: '#5E81F4' },
+                        { label: '평균 좋아요', value: fmt(avgLikes), color: '#16B1FF' },
+                        { label: '참여율', value: `${er}%`, color: '#7CE7AC' },
+                        { label: '비주얼 점수', value: score != null ? `${score}/10` : '—', color: '#F4BE5E' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label}>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 mb-1">{label}</p>
+                          <p className="text-2xl font-black leading-none" style={{ color }}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 mb-1">인게이지먼트 순위</p>
+                    <p className="text-4xl font-black text-white">{erRanks[i]}<span className="text-lg text-white/30">/{analyzedData.length}</span></p>
+                    <p className="text-[9px] text-white/30 mt-1">비주얼 {vsRanks[i]}위</p>
                   </div>
                 </div>
-              )}
-              {c.summary && (
-                <div>
-                  <DataLabel>요약</DataLabel>
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">{c.summary}</p>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+                {/* 팔레트 스와치 */}
+                {palette && (
+                  <div className="flex h-10">
+                    {paletteColors.map((c, j) => (
+                      <div key={j} className="flex-1" style={{ background: c }} />
+                    ))}
+                  </div>
+                )}
+
+                {/* 게시물 썸네일 6장 */}
+                {topPosts.length > 0 && (
+                  <div className="grid grid-cols-6 gap-0.5 bg-slate-100">
+                    {topPosts.map((p: any, j: number) => (
+                      <a key={j} href={p.post_url} target="_blank" rel="noopener noreferrer" className="group relative block aspect-square">
+                        <PostImg src={p.image_urls?.[0]} className="w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-center justify-center">
+                          <span className="text-white font-black text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                            ♥ {fmt(p.likes_count)}
+                          </span>
+                        </div>
+                        {j === 0 && <div className="absolute top-1.5 left-1.5 bg-yellow-400 text-yellow-900 text-[7px] font-black px-1.5 py-0.5 rounded uppercase">TOP</div>}
+                        {(p.is_reel || p.is_carousel) && (
+                          <span className="absolute top-1.5 right-1.5 text-[7px] font-black text-white px-1.5 py-0.5 rounded"
+                            style={{ background: p.is_reel ? '#16B1FF' : '#5E81F4' }}>
+                            {p.is_reel ? 'R' : 'C'}
+                          </span>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* 캡션 전략 요약 */}
+                {acc.captions?.summary && (
+                  <div className="px-8 py-5 border-t border-slate-100">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">캡션 전략 요약</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">{acc.captions.summary}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 탭 3: 종합 & 무드보드 (Synthesis)
-// ────────────────────────────────────────────────────────────
+// ── Tab 3: Synthesis ───────────────────────────────────────────
 
 function SynthesisPane({ report, analyzedData }: { report: AgentReport; analyzedData: any[] }) {
   return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="STEP 3" sub="Synthesis & Moodboard" title="핵심 패턴 종합 및 시각적 무드보드" />
+    <div className="space-y-20 pt-12">
 
-      {/* 핵심 패턴 Top */}
+      {/* ① 핵심 공통 패턴 */}
       {report.keyPatterns?.length > 0 && (
-        <div className="bg-white p-10 lg:p-14 rounded-3xl border border-slate-200 shadow-xl">
-          <InfoHeadline className="text-2xl mb-10">계정들을 가로지르는 핵심 공통 패턴</InfoHeadline>
+        <section>
+          <SectionHeader tag="Key Patterns" title="계정들을 가로지르는 핵심 공통 패턴" tagColor="#5E81F4" />
           <div className="space-y-5">
             {report.keyPatterns.map((p, i) => (
-              <div
-                key={i}
-                className="flex flex-col md:flex-row gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100 items-start md:items-center hover:bg-white hover:shadow-md transition"
-              >
-                <span
-                  className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 shadow-lg ${
-                    i < 2 ? 'bg-indigo-600 text-white shadow-indigo-500/30' : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                <p className="text-base text-slate-700 leading-relaxed">{p}</p>
+              <div key={i} className="grid grid-cols-[80px_1fr] gap-6 items-center rounded-2xl border border-slate-100 p-6 hover:bg-slate-50 transition">
+                <span className="text-7xl font-black leading-none text-slate-100 text-center">{i + 1}</span>
+                <div>
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <p className="text-lg font-black text-slate-900">{p.pattern}</p>
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-full" style={{ background: '#5E81F415', color: '#5E81F4' }}>{p.observed}</span>
+                  </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">{p.implication}</p>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* 비주얼 트렌드 / 캡션 트렌드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {report.visualTrends?.length > 0 && (
-          <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-xl border-t-[8px] border-t-indigo-400">
-            <InfoHeadline className="text-xl mb-8">공통 비주얼 트렌드</InfoHeadline>
-            <ul className="text-sm text-slate-700 space-y-5">
-              {report.visualTrends.map((t, i) => (
-                <li key={i} className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100">
-                  <strong className="text-indigo-900 block text-base mb-1.5">{i + 1}. {t.split('：')[0] || t.split(':')[0] || t}</strong>
-                  {t.includes('：') ? <p className="text-slate-600 leading-relaxed">{t.split('：').slice(1).join('：')}</p>
-                   : t.includes(':') ? <p className="text-slate-600 leading-relaxed">{t.split(':').slice(1).join(':')}</p>
-                   : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {report.captionTrends?.length > 0 && (
-          <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-xl border-t-[8px] border-t-teal-400">
-            <InfoHeadline className="text-xl mb-8">공통 캡션/화법 트렌드</InfoHeadline>
-            <ul className="text-sm text-slate-700 space-y-5">
-              {report.captionTrends.map((t, i) => (
-                <li key={i} className="bg-teal-50 p-5 rounded-2xl border border-teal-100">
-                  <strong className="text-teal-900 block text-base mb-1.5">{i + 1}. {t.split('：')[0] || t.split(':')[0] || t}</strong>
-                  {t.includes('：') ? <p className="text-slate-600 leading-relaxed">{t.split('：').slice(1).join('：')}</p>
-                   : t.includes(':') ? <p className="text-slate-600 leading-relaxed">{t.split(':').slice(1).join(':')}</p>
-                   : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* 무드보드 갤러리 — Pinterest 마스너리 */}
-      {analyzedData.some((acc) => acc.posts?.some((p: any) => p.image_urls?.[0])) && (
-        <div className="bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] p-12 rounded-3xl border border-slate-200">
-          <InfoHeadline className="text-2xl mb-10">시각적 트렌드 증거 모음 (무드보드)</InfoHeadline>
-          <div className="columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5">
+      {/* ② 무드보드 — 마스너리 이미지 그리드 */}
+      {analyzedData.some(acc => acc.posts?.some((p: any) => p.image_urls?.[0])) && (
+        <section>
+          <SectionHeader tag="Visual Moodboard" title="시각적 트렌드 증거 모음" tagColor="#F4BE5E" />
+          <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {analyzedData
               .flatMap((acc: any) =>
                 (acc.posts ?? []).map((p: any) => ({
                   url: p.image_urls?.[0],
                   username: acc.profile?.username,
-                  palette: acc.visuals?.feed_tone?.palette,
+                  likes: p.likes_count,
                 }))
               )
-              .filter((item) => item.url)
-              .slice(0, 12)
+              .filter(item => item.url)
+              .slice(0, 16)
               .map((item, i) => (
-                <div key={i} className="break-inside-avoid relative group rounded-3xl overflow-hidden shadow-lg">
+                <div key={i} className="break-inside-avoid relative group rounded-2xl overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.url}
-                    alt=""
-                    className="w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
-                    style={{ minHeight: '120px', background: '#f1f5f9' }}
+                  <img src={item.url} alt="" className="w-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                    style={{ minHeight: '100px', background: '#f1f5f9' }}
                     referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition duration-300 flex items-end justify-center pb-4">
-                    <span className="text-white text-xs font-bold border border-white px-3 py-1.5 rounded-full uppercase tracking-wider backdrop-blur-sm">
-                      @{item.username}
-                    </span>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition duration-300 flex flex-col items-end justify-end pb-3 px-3 gap-1"
+                    style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%)' }}>
+                    <span className="text-white text-[10px] font-bold">@{item.username}</span>
+                    <span className="text-white/70 text-[9px]">♥ {fmt(item.likes ?? 0)}</span>
                   </div>
                 </div>
               ))}
           </div>
-        </div>
+          <p className="text-xs text-slate-400 mt-4 text-center">마우스를 올리면 컬러로 전환됩니다</p>
+        </section>
       )}
 
-      {/* 분석 근거 계정 */}
+      {/* ③ 비주얼 트렌드 + 캡션 트렌드 */}
+      {(report.visualTrends?.length > 0 || report.captionTrends?.length > 0) && (
+        <section>
+          <SectionHeader tag="Trends" title="비주얼 & 캡션 트렌드" tagColor="#7CE7AC" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {report.visualTrends?.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-5">비주얼 트렌드</p>
+                <ol className="space-y-6">
+                  {report.visualTrends.map((t, i) => (
+                    <li key={i} className="flex items-start gap-4">
+                      <span className="text-4xl font-black leading-none shrink-0 text-slate-100">{String(i + 1).padStart(2, '0')}</span>
+                      <div className="pt-1">
+                        <p className="text-xl font-black text-slate-900 leading-tight mb-1.5">{t.title}</p>
+                        <p className="text-sm text-slate-500 leading-relaxed">{t.description}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {report.captionTrends?.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-5">캡션 트렌드</p>
+                <ol className="space-y-6">
+                  {report.captionTrends.map((t, i) => (
+                    <li key={i} className="flex items-start gap-4">
+                      <span className="text-4xl font-black leading-none shrink-0 text-slate-100">{String(i + 1).padStart(2, '0')}</span>
+                      <div className="pt-1">
+                        <p className="text-xl font-black text-slate-900 leading-tight mb-1.5">{t.title}</p>
+                        <p className="text-sm text-slate-500 leading-relaxed">{t.description}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ④ 분석 근거 계정 */}
       {report.supportingAccounts?.length > 0 && (
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm">
-          <InfoHeadline>분석 근거 계정 (AI 선정 이유)</InfoHeadline>
+        <section>
+          <SectionHeader tag="Supporting Evidence" title="분석 근거 계정" tagColor="#9698D6" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {report.supportingAccounts.map((acc, i) => (
-              <div key={i} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex gap-4 items-start">
-                <span className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-sm shrink-0">{i + 1}</span>
+              <div key={i} className="flex items-start gap-4 rounded-2xl border border-slate-100 p-6 hover:bg-slate-50 transition">
+                <span className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shrink-0"
+                  style={{ background: '#1C1D21' }}>{i + 1}</span>
                 <div>
-                  <p className="font-black text-sm text-indigo-600 mb-1.5">@{acc.username}</p>
-                  <p className="text-xs text-slate-600 font-medium leading-relaxed">{acc.reasonToInclude}</p>
+                  <p className="font-black text-sm mb-1.5" style={{ color: '#5E81F4' }}>@{acc.username}</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">{acc.reasonToInclude}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 탭 4: SWOT & 실행 (Execution)
-// ────────────────────────────────────────────────────────────
+// ── Tab 4: Execution ───────────────────────────────────────────
 
 function ExecutionPane({ report }: { report: AgentReport }) {
   const swot = report.swot ?? { strengths: [], weaknesses: [], opportunities: [], threats: [] };
 
-  return (
-    <div className="space-y-14 pb-20">
-      <MagazineHeader num="CONCLUSION" sub="SWOT & Action Strategy" title="트렌드 적용 리스크 및 최종 실행 권고" />
+  const radarData = {
+    labels: ['Strength', 'Opportunity', 'Weakness', 'Threat'],
+    datasets: [{
+      data: [
+        Math.min((swot.strengths?.length ?? 0) * 3, 10) || 7,
+        Math.min((swot.opportunities?.length ?? 0) * 3, 10) || 6,
+        Math.min((swot.weaknesses?.length ?? 0) * 3, 10) || 4,
+        Math.min((swot.threats?.length ?? 0) * 3, 10) || 3,
+      ],
+      backgroundColor: 'rgba(94,129,244,0.10)',
+      borderColor: '#5E81F4', borderWidth: 2,
+      pointBackgroundColor: '#5E81F4', pointRadius: 4,
+    }],
+  };
 
-      {/* 트렌드 SWOT */}
-      <div className="bg-slate-900 p-10 lg:p-14 rounded-3xl shadow-2xl">
-        <h3 className="pl-4 border-l-4 border-indigo-500 font-black text-3xl text-white mb-12">
-          트렌드 자체의 SWOT (도입 시 장단점)
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-white">
-          {[
-            { key: 'strengths', label: 'S (트렌드 강점)', color: 'text-blue-400' },
-            { key: 'weaknesses', label: 'W (트렌드 약점)', color: 'text-red-400' },
-            { key: 'opportunities', label: 'O (트렌드 기회)', color: 'text-green-400' },
-            { key: 'threats', label: 'T (트렌드 위협)', color: 'text-orange-400' },
-          ].map(({ key, label, color }) => (
-            <div key={key} className="bg-white/10 p-8 rounded-3xl border border-white/20">
-              <span className={`${color} font-black text-xl mb-5 block`}>{label}</span>
-              <ul className="space-y-3 text-sm font-medium text-slate-200 list-disc pl-5">
-                {((swot as any)[key] ?? []).map((item: string, i: number) => (
-                  <li key={i}>{item}</li>
-                ))}
+  const swotConfig = [
+    { key: 'strengths', letter: 'S', title: '강점', bg: '#F0FDF4', border: '#BBF7D0', text: '#15803D', accent: '#22C55E' },
+    { key: 'weaknesses', letter: 'W', title: '약점', bg: '#FFF7ED', border: '#FED7AA', text: '#C2410C', accent: '#F97316' },
+    { key: 'opportunities', letter: 'O', title: '기회', bg: '#EFF6FF', border: '#BFDBFE', text: '#1D4ED8', accent: '#3B82F6' },
+    { key: 'threats', letter: 'T', title: '위협', bg: '#FFF1F2', border: '#FECDD3', text: '#BE123C', accent: '#F43F5E' },
+  ];
+
+  return (
+    <div className="space-y-20 pt-12">
+
+      {/* ① SWOT 2×2 */}
+      <section>
+        <SectionHeader tag="Strategic Analysis" title="트렌드 SWOT 분석" tagColor="#5E81F4" />
+        <div className="grid grid-cols-2 gap-4">
+          {swotConfig.map(({ key, letter, title, bg, border, text, accent }) => (
+            <div key={key} className="rounded-2xl p-8" style={{ background: bg, border: `1px solid ${border}` }}>
+              <div className="flex items-baseline gap-3 mb-6">
+                <span className="text-7xl font-black leading-none" style={{ color: accent }}>{letter}</span>
+                <span className="text-xl font-black" style={{ color: text }}>{title}</span>
+              </div>
+              <ul className="space-y-3">
+                {((swot as any)[key] ?? []).map((item: string, i: number) => {
+                  const parts = item.split(/[:：]/);
+                  return (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <div className="w-1 h-4 rounded-full shrink-0 mt-1" style={{ background: accent }} />
+                      <p className="text-sm leading-relaxed" style={{ color: text }}>
+                        {parts.length > 1 ? <><strong className="font-black">{parts[0]}</strong>: {parts.slice(1).join(':')}</> : item}
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* 한계점 & 실행 전략 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* 분석 한계점 */}
-        {report.limitations && (
-          <div className="lg:col-span-1 bg-red-50 p-10 rounded-3xl border border-red-200 flex flex-col justify-center">
-            <InfoHeadline className="text-red-800 border-l-red-600 text-xl mb-6">⚠️ 분석 한계점 및 편향성</InfoHeadline>
-            <p className="text-base text-red-900 leading-relaxed mb-6 font-medium">{report.limitations}</p>
-            <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm">
-              <strong className="block text-red-800 mb-2 text-sm">해석 주의사항</strong>
-              <p className="text-xs text-slate-700 leading-relaxed">
-                트렌드는 브랜드 '무드' 베이스로만 적용하되, 신규 유입을 위한 퍼포먼스 콘텐츠를 병행하는 듀얼 트랙 전략을 권장합니다.
-              </p>
-            </div>
+      {/* ② Radar + 실행 전략 */}
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-10 items-start">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600 mb-4">SWOT 레이더</p>
+          <div className="h-80 bg-slate-50 rounded-2xl p-6">
+            <Radar data={radarData} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { enabled: false } },
+              scales: {
+                r: {
+                  beginAtZero: true, max: 10, ticks: { display: false },
+                  grid: { color: '#F1F5F9' }, angleLines: { color: '#E2E8F0' },
+                  pointLabels: { color: '#1E293B', font: { size: 11, weight: 'bold' as const } },
+                },
+              },
+            }} />
           </div>
-        )}
-
-        {/* 실행 전략 */}
+        </div>
         {report.recommendations?.length > 0 && (
-          <div className={`${report.limitations ? 'lg:col-span-2' : 'lg:col-span-3'} bg-indigo-50 p-10 lg:p-14 rounded-3xl border border-indigo-100`}>
-            <InfoHeadline className="text-indigo-900 border-l-indigo-600 text-2xl mb-10">
-              트렌드 활용을 위한 실행 전략
-            </InfoHeadline>
-            <div className="space-y-6">
+          <div>
+            <SectionHeader tag="Action Strategy" title="즉시 적용 가능한 실행 전략" tagColor="#7CE7AC" />
+            <ol className="space-y-5">
               {report.recommendations.map((rec, i) => (
-                <div
-                  key={i}
-                  className="bg-white p-8 rounded-2xl shadow-lg border border-indigo-50 flex flex-col md:flex-row gap-6 items-start md:items-center"
-                >
-                  <div className="w-16 h-16 bg-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-xl shrink-0 shadow-lg shadow-indigo-500/30">
-                    A{i + 1}
-                  </div>
-                  <p className="text-base text-slate-700 leading-relaxed font-medium">{rec}</p>
-                </div>
+                <li key={i} className="flex items-start gap-5">
+                  <span className="text-5xl font-black leading-none shrink-0 text-slate-100">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <p className="text-base text-slate-700 leading-relaxed font-medium pt-2">{rec}</p>
+                </li>
               ))}
-            </div>
+            </ol>
           </div>
         )}
-      </div>
+      </section>
+
+      {/* ③ 분석 한계점 */}
+      {report.limitations && (
+        <section>
+          <SectionHeader tag="Limitations" title="분석 한계점 및 편향성" tagColor="#F43F5E" />
+          <div className="rounded-2xl bg-red-50 border border-red-100 p-8">
+            <p className="text-base text-red-900 leading-relaxed">{report.limitations}</p>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────
-// 메인 컴포넌트
-// ────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────
 
 interface Props {
   report: AgentReport;
   analyzedData?: any[];
   failedAccounts?: string[];
+  metaInfo?: { sessionCount: number; totalAccounts: number } | null;
 }
 
-export default function AgentReportCard({ report, analyzedData = [], failedAccounts = [] }: Props) {
+export default function AgentReportCard({ report, analyzedData = [], failedAccounts = [], metaInfo }: Props) {
   const [activeTab, setActiveTab] = useState<TrendTab>('discovery');
   const { prompt, discoveryResult } = useAgentStore();
 
   if (!report) return null;
 
-  const tabs: { key: TrendTab; label: string }[] = [
-    { key: 'discovery', label: '1단계: 탐색 및 요약' },
-    { key: 'deepdive', label: '2단계: 심층 매트릭스' },
-    { key: 'synthesis', label: '3단계: 종합 & 무드보드' },
-    { key: 'execution', label: '결론: SWOT & 실행' },
-  ];
-
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full mt-10">
-      {/* 분석 현황 */}
-      {(analyzedData.length > 0 || failedAccounts.length > 0) && (
-        <div className="flex flex-wrap gap-2 items-center mb-2">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full mt-10">
+
+      {/* 메타 분석 배너 */}
+      {metaInfo && (
+        <div className="rounded-2xl px-6 py-4 flex items-center gap-4" style={{ background: '#1C1D21' }}>
+          <div className="w-2 h-8 rounded-full shrink-0" style={{ background: '#5E81F4' }} />
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest mb-0.5" style={{ color: '#5E81F4' }}>Meta Analysis</p>
+            <p className="text-sm font-bold text-white">
+              이 분석은 <span style={{ color: '#7CE7AC' }}>{metaInfo.sessionCount}번의 리서치</span>,{' '}
+              <span style={{ color: '#16B1FF' }}>{metaInfo.totalAccounts}개 계정</span> 데이터를 종합한 결과입니다
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 분석 현황 배지 */}
+      {!metaInfo && (analyzedData.length > 0 || failedAccounts.length > 0) && (
+        <div className="flex flex-wrap gap-2 items-center">
           <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Status:</span>
           <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-100">
-            <CheckCircle className="w-2.5 h-2.5" />{analyzedData.length} SUCCESS
+            <CheckCircle className="w-2.5 h-2.5" /> {analyzedData.length} SUCCESS
           </span>
           {failedAccounts.length > 0 && (
             <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100">
-              <XCircle className="w-2.5 h-2.5" />{failedAccounts.length} FAILED
+              <XCircle className="w-2.5 h-2.5" /> {failedAccounts.length} FAILED
             </span>
           )}
         </div>
       )}
 
-      {/* 서브 탭 네비게이션 */}
-      <div className="flex flex-wrap gap-2 mb-10 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm w-full overflow-x-auto scrollbar-hide">
-        {tabs.map((t) => (
-          <SubTabBtn
-            key={t.key}
-            active={activeTab === t.key}
-            onClick={() => {
-              setActiveTab(t.key);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-          >
-            {t.label}
-          </SubTabBtn>
-        ))}
-      </div>
+      <TabNav active={activeTab} onChange={setActiveTab} />
 
-      <div className="animate-in fade-in duration-700">
+      <div className="min-h-[400px]">
         {activeTab === 'discovery' && (
           <DiscoveryPane report={report} prompt={prompt} discoveryResult={discoveryResult} analyzedData={analyzedData} />
         )}

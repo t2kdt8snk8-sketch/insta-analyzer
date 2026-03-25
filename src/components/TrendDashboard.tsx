@@ -261,7 +261,7 @@ export default function TrendDashboard({ report, analyzedData = [], failedAccoun
             <h2 className="text-4xl font-black tracking-tighter text-white italic mb-8">핵심 공통 패턴</h2>
             <div>
               {report.keyPatterns?.map((p, i) => (
-                <PatternRow key={i} text={p} index={i + 1} />
+                <PatternRow key={i} text={`${p.pattern} (${p.observed}) — ${p.implication}`} index={i + 1} />
               ))}
             </div>
           </div>
@@ -295,7 +295,7 @@ export default function TrendDashboard({ report, analyzedData = [], failedAccoun
             <h2 className="text-4xl font-black tracking-tighter text-white italic mb-8">비주얼 트렌드</h2>
             <div>
               {report.visualTrends?.map((t, i) => (
-                <PatternRow key={i} text={t} index={i + 1} />
+                <PatternRow key={i} text={typeof t === 'string' ? t : `${t.title} — ${t.description}`} index={i + 1} />
               ))}
             </div>
           </div>
@@ -335,7 +335,7 @@ export default function TrendDashboard({ report, analyzedData = [], failedAccoun
           <h2 className="text-4xl font-black tracking-tighter text-white italic mb-8">캡션 전략 트렌드</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16">
             {report.captionTrends?.map((t, i) => (
-              <PatternRow key={i} text={t} index={i + 1} />
+              <PatternRow key={i} text={typeof t === 'string' ? t : `${t.title} — ${t.description}`} index={i + 1} />
             ))}
           </div>
         </div>

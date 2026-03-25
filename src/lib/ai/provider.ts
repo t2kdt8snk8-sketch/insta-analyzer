@@ -3,8 +3,10 @@ import {
   SYSTEM_PROMPT,
   VISUAL_ANALYSIS_PROMPT,
   CAPTION_ANALYSIS_PROMPT,
+  CAPTION_ANALYSIS_PROMPT_SHORT,
   FULL_REPORT_PROMPT,
   AGENT_SYNTHESIS_PROMPT,
+  META_SYNTHESIS_PROMPT,
   DISCOVERY_PROMPT
 } from './prompts';
 import { AgentReport } from '../scraper/types';
@@ -44,12 +46,19 @@ export interface AccountReport {
   recommendations: any;
 }
 
+export interface MetaSession {
+  prompt: string;
+  analyzed_at: string;
+  accounts: FullAnalysisData[];
+}
+
 export interface AIProvider {
   analyzeVisuals(imageData: { base64: string; mimeType: string }[]): Promise<VisualAnalysis>;
   analyzeCaptions(captions: string[]): Promise<CaptionAnalysis>;
   generateAccountReport(data: FullAnalysisData): Promise<AccountReport>;
   discoverAccounts(prompt: string, userContext?: string, previousAccounts?: string[]): Promise<any>;
   generateAgenticReport(prompt: string, scrapedData: FullAnalysisData[]): Promise<AgentReport>;
+  generateMetaReport(sessions: MetaSession[]): Promise<AgentReport>;
 }
 
 export class GeminiProvider implements AIProvider {
@@ -59,15 +68,42 @@ export class GeminiProvider implements AIProvider {
     this.ai_client = new GoogleGenAI({ apiKey: apiKey || process.env.GEMINI_API_KEY });
   }
 
+  private async withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 5000): Promise<T> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (e: any) {
+        const is503 = e?.status === 503 || e?.message?.includes('503') || e?.message?.includes('UNAVAILABLE');
+        if (is503 && attempt < maxRetries) {
+          console.log(`[AI] 503 에러 — ${delayMs / 1000}초 후 재시도 (${attempt}/${maxRetries})`);
+          await new Promise(r => setTimeout(r, delayMs));
+        } else {
+          throw e;
+        }
+      }
+    }
+    throw new Error('Max retries exceeded');
+  }
+
   private parseJsonResponse<T>(output: string): T {
     // JSON 블록 앞뒤에 설명 문구나 마크다운이 붙어도 JSON 부분만 추출
     const match = output.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (match) {
-      return JSON.parse(match[0]) as T;
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch (e) {
+        console.error('[AI] JSON parse failed on matched block. Raw output:', output.slice(0, 500));
+        throw e;
+      }
     }
     // 매칭 실패 시 기존 방식으로 폴백
     const cleaned = output.replace(/^```json\s*/im, '').replace(/```[\s\S]*$/im, '').trim();
-    return JSON.parse(cleaned) as T;
+    try {
+      return JSON.parse(cleaned) as T;
+    } catch (e) {
+      console.error('[AI] JSON parse failed on cleaned string. Raw output:', output.slice(0, 500));
+      throw e;
+    }
   }
 
   // Base64 이미지 데이터를 부분 파트로 변환하는 유틸리티 메서드
@@ -116,6 +152,7 @@ export class GeminiProvider implements AIProvider {
       inlineData: { data: base64, mimeType },
     }));
     console.log(`[AI] Image parts ready: ${imageParts.length}`);
+    const visualPrompt = VISUAL_ANALYSIS_PROMPT.replace(/\[IMAGE_COUNT_PLACEHOLDER\]/g, imageParts.length.toString());
 
     if (imageParts.length === 0) {
       console.log('[AI] No images available, skipping visual analysis.');
@@ -129,16 +166,16 @@ export class GeminiProvider implements AIProvider {
       };
     }
 
-    const response = await this.ai_client.models.generateContent({
+    const response = await this.withRetry(() => this.ai_client.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: [
-        { role: 'user', parts: [...imageParts, { text: VISUAL_ANALYSIS_PROMPT }] }
+        { role: 'user', parts: [...imageParts, { text: visualPrompt }] }
       ],
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
       }
-    });
+    }));
 
     const output = response.text;
     if (!output) throw new Error("Empty AI response");
@@ -148,16 +185,17 @@ export class GeminiProvider implements AIProvider {
 
   async analyzeCaptions(captions: string[]): Promise<CaptionAnalysis> {
     console.log('[AI] Starting Caption Analysis...');
-    const prompt = CAPTION_ANALYSIS_PROMPT.replace('[CAPTIONS_PLACEHOLDER]', captions.join('\n\n---\n\n'));
+    const basePrompt = captions.length < 5 ? CAPTION_ANALYSIS_PROMPT_SHORT : CAPTION_ANALYSIS_PROMPT;
+    const prompt = basePrompt.replace('[CAPTIONS_PLACEHOLDER]', captions.join('\n\n---\n\n'));
 
-    const response = await this.ai_client.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview', // 텍스트 분석/추론에 특화된 모델 (또는 flash)
+    const response = await this.withRetry(() => this.ai_client.models.generateContent({
+      model: 'gemini-3.1-flash-lite-preview',
       contents: prompt,
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
       }
-    });
+    }));
 
     const output = response.text;
     if (!output) throw new Error("Empty AI response");
@@ -172,6 +210,49 @@ export class GeminiProvider implements AIProvider {
       content_ratio: visuals.grid_strategy?.content_ratio,
       dominant_patterns: visuals.composition?.dominant_patterns,
       summary: visuals.summary,
+    };
+  }
+
+  private compressForMetaAnalysis(data: FullAnalysisData) {
+    const posts = data.posts ?? [];
+    const avgLikes = posts.length > 0
+      ? Math.round(posts.reduce((a, p) => a + (p.likes_count ?? 0), 0) / posts.length) : 0;
+    const followers = data.profile?.followers_count ?? 0;
+    const engagementRate = followers > 0 ? parseFloat((avgLikes / followers * 100).toFixed(2)) : 0;
+
+    const topPosts = [...posts]
+      .sort((a, b) => (b.likes_count ?? 0) - (a.likes_count ?? 0))
+      .slice(0, 5)
+      .map(p => ({
+        likes_count: p.likes_count ?? 0,
+        caption_preview: (p.caption ?? '').slice(0, 50),
+        image_url: p.image_urls?.[0] ?? null,
+        is_reel: p.is_reel,
+        is_carousel: p.is_carousel,
+      }));
+
+    const v = data.visuals ?? {};
+    const c = data.captions ?? ({} as CaptionAnalysis);
+
+    return {
+      username: data.profile?.username,
+      followers,
+      avg_likes: avgLikes,
+      engagement_rate: engagementRate,
+      visual: {
+        palette: v.feed_tone?.palette,
+        dominant_patterns: v.composition?.dominant_patterns,
+        visual_identity_score: v.visual_identity?.score,
+        content_ratio: v.grid_strategy?.content_ratio,
+      },
+      caption: {
+        speech_style: c.tone_manner?.speech_style,
+        hook_style: c.caption_strategy?.hook_style ?? (c as any).hook_style?.primary_hook,
+        cta_pattern: c.engagement_style?.cta_pattern,
+        top_themes: c.content_categories?.top_themes,
+        hashtag_examples: (c.hashtag_strategy?.examples ?? []).slice(0, 5),
+      },
+      top_posts: topPosts,
     };
   }
 
@@ -190,7 +271,7 @@ export class GeminiProvider implements AIProvider {
 
     const captions = data.posts.map(p => p.caption).filter(Boolean) as string[];
 
-    // 해시태그 통계 코드 계산
+    // 해시태그 통계 계산
     const hashtagCounts = captions.map(c => (c.match(/#[\w가-힣]+/g) || []).length);
     const avgHashtagCount = hashtagCounts.length > 0
       ? Math.round(hashtagCounts.reduce((a, b) => a + b, 0) / hashtagCounts.length)
@@ -212,30 +293,92 @@ export class GeminiProvider implements AIProvider {
       ? Math.round(captions.reduce((acc, c) => acc + c.length, 0) / captions.length)
       : 0;
 
+    // 인게이지먼트율 계산 (팔로워 수 대비 평균 좋아요)
+    const avgLikes = Math.round(totalLikes / data.posts.length) || 0;
+    const followers = data.profile.followers_count || 0;
+    const engagementRate = followers > 0
+      ? parseFloat((avgLikes / followers * 100).toFixed(2))
+      : null;
+
+    // 포맷별 평균 인게이지먼트 계산
+    const reels = data.posts.filter(p => p.is_reel);
+    const carousels = data.posts.filter(p => !p.is_reel && p.is_carousel);
+    const singles = data.posts.filter(p => !p.is_reel && !p.is_carousel);
+    const avgByFormat = (posts: typeof data.posts) =>
+      posts.length > 0 ? Math.round(posts.reduce((acc, p) => acc + p.likes_count, 0) / posts.length) : null;
+    const formatEngagement = {
+      reels: { count: reels.length, avg_likes: avgByFormat(reels) },
+      carousel: { count: carousels.length, avg_likes: avgByFormat(carousels) },
+      single: { count: singles.length, avg_likes: avgByFormat(singles) },
+    };
+
+    // 상위/하위 퍼포머 분리 (상위 20%, 하위 20%)
+    const sortedByLikes = [...data.posts].sort((a, b) => b.likes_count - a.likes_count);
+    const topCount = Math.max(1, Math.ceil(data.posts.length * 0.2));
+    const lowCount = Math.max(1, Math.ceil(data.posts.length * 0.2));
+    const topPerformers = sortedByLikes.slice(0, topCount).map(p => ({
+      likes_count: p.likes_count,
+      is_reel: p.is_reel,
+      is_carousel: p.is_carousel,
+      caption_preview: p.caption ? p.caption.slice(0, 80) : '',
+      hashtag_count: (p.caption?.match(/#[\w가-힣]+/g) || []).length,
+    }));
+    const lowPerformers = sortedByLikes.slice(-lowCount).map(p => ({
+      likes_count: p.likes_count,
+      is_reel: p.is_reel,
+      is_carousel: p.is_carousel,
+      caption_preview: p.caption ? p.caption.slice(0, 80) : '',
+      hashtag_count: (p.caption?.match(/#[\w가-힣]+/g) || []).length,
+    }));
+
+    // 게시물 레벨 페어링 — 상위 5개 이미지+캡션+성과 묶음
+    const topPaired = sortedByLikes.slice(0, Math.min(5, sortedByLikes.length)).map(p => ({
+      likes_count: p.likes_count,
+      comments_count: p.comments_count,
+      is_reel: p.is_reel,
+      is_carousel: p.is_carousel,
+      caption_preview: p.caption ? p.caption.slice(0, 120) : '',
+      has_image: (p.image_urls?.length ?? 0) > 0,
+    }));
+
+    // 시계열 데이터 — 게시물별 날짜+성과 (posted_at 있는 경우만)
+    const postTimeline = data.posts
+      .filter(p => p.posted_at)
+      .map(p => ({ posted_at: p.posted_at, likes_count: p.likes_count, is_reel: p.is_reel, is_carousel: p.is_carousel }))
+      .sort((a, b) => new Date(a.posted_at!).getTime() - new Date(b.posted_at!).getTime());
+
     const statsRaw = {
-      avg_likes: Math.round(totalLikes / data.posts.length) || 0,
+      avg_likes: avgLikes,
       avg_comments: Math.round(totalComments / data.posts.length) || 0,
       avg_caption_length_chars: avgCaptionLength,
       avg_hashtag_count: avgHashtagCount,
       hashtag_placement: hashtagPlacement,
       sample_size: data.posts.length,
+      engagement_rate: engagementRate,
+      format_engagement: formatEngagement,
+      top_performers: topPerformers,
+      low_performers: lowPerformers,
+      top_paired_posts: topPaired,
+      post_timeline: postTimeline.length > 0 ? postTimeline : undefined,
     };
 
     // 1,2단계 결과는 핵심 필드만 압축해서 전달 (컨텍스트 과부하 방지)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { profile_image_data: _pid, ...profileForAI } = data.profile;
     let prompt = FULL_REPORT_PROMPT;
-    prompt = prompt.replace('[PROFILE_PLACEHOLDER]', JSON.stringify(data.profile, null, 2));
+    prompt = prompt.replace('[PROFILE_PLACEHOLDER]', JSON.stringify(profileForAI, null, 2));
     prompt = prompt.replace('[VISUAL_PLACEHOLDER]', JSON.stringify(this.compressVisualAnalysis(data.visuals), null, 2));
     prompt = prompt.replace('[CAPTION_PLACEHOLDER]', JSON.stringify(this.compressCaptionAnalysis(data.captions), null, 2));
     prompt = prompt.replace('[STATS_PLACEHOLDER]', JSON.stringify(statsRaw, null, 2));
 
-    const response = await this.ai_client.models.generateContent({
+    const response = await this.withRetry(() => this.ai_client.models.generateContent({
       model: 'gemini-3.1-pro-preview',
       contents: prompt,
       config: {
         systemInstruction: SYSTEM_PROMPT,
         responseMimeType: "application/json",
       }
-    });
+    }));
 
     const output = response.text;
     if (!output) throw new Error("Empty AI response");
@@ -283,16 +426,42 @@ export class GeminiProvider implements AIProvider {
     console.log('[AI] Synthesizing Agentic Final Report for prompt:', promptText);
 
     // We only need relevant parts of the scraped data to avoid token limits with multiple accounts.
-    const optimizedData = scrapedData.map(data => ({
-      username: data.profile.username,
-      profile_info: data.profile,
-      visual_features: this.compressVisualAnalysis(data.visuals),
-      caption_features: this.compressCaptionAnalysis(data.captions),
-      recent_engagement: {
-        avg_likes: Math.round(data.posts.reduce((acc, p) => acc + p.likes_count, 0) / data.posts.length) || 0,
-        avg_comments: Math.round(data.posts.reduce((acc, p) => acc + p.comments_count, 0) / data.posts.length) || 0
-      }
-    }));
+    // 먼저 각 계정의 인게이지먼트율과 비주얼 점수를 계산
+    const accountStats = scrapedData.map(data => {
+      const avgLikes = Math.round(data.posts.reduce((acc, p) => acc + p.likes_count, 0) / data.posts.length) || 0;
+      const followers = data.profile.followers_count || 0;
+      const engagementRate = followers > 0 ? parseFloat((avgLikes / followers * 100).toFixed(2)) : 0;
+      const visualScore = data.visuals?.visual_identity?.score ?? 0;
+      return { username: data.profile.username, avgLikes, engagementRate, visualScore };
+    });
+
+    // 인게이지먼트율 기준 순위 계산 (1위 = 가장 높음)
+    const sortedByEngagement = [...accountStats].sort((a, b) => b.engagementRate - a.engagementRate);
+    const sortedByVisual = [...accountStats].sort((a, b) => b.visualScore - a.visualScore);
+    const engagementRankMap = new Map(sortedByEngagement.map((s, i) => [s.username, i + 1]));
+    const visualRankMap = new Map(sortedByVisual.map((s, i) => [s.username, i + 1]));
+
+    const optimizedData = scrapedData.map(data => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { profile_image_data: _pid, ...profileInfo } = data.profile;
+      const avgLikes = Math.round(data.posts.reduce((acc, p) => acc + p.likes_count, 0) / data.posts.length) || 0;
+      const avgComments = Math.round(data.posts.reduce((acc, p) => acc + p.comments_count, 0) / data.posts.length) || 0;
+      const followers = data.profile.followers_count || 0;
+      const engagementRate = followers > 0 ? parseFloat((avgLikes / followers * 100).toFixed(2)) : 0;
+      return {
+        username: data.profile.username,
+        profile_info: profileInfo,
+        visual_features: this.compressVisualAnalysis(data.visuals),
+        caption_features: this.compressCaptionAnalysis(data.captions),
+        recent_engagement: {
+          avg_likes: avgLikes,
+          avg_comments: avgComments,
+          engagement_rate: engagementRate,
+          engagement_rank: `${engagementRankMap.get(data.profile.username)}/${scrapedData.length}위`,
+          visual_score_rank: `${visualRankMap.get(data.profile.username)}/${scrapedData.length}위`,
+        }
+      };
+    });
 
     let prompt = AGENT_SYNTHESIS_PROMPT;
     prompt = prompt.replace('[USER_PROMPT_PLACEHOLDER]', promptText);
@@ -309,6 +478,52 @@ export class GeminiProvider implements AIProvider {
 
     const output = response.text;
     if (!output) throw new Error("Empty AI response");
+
+    return this.parseJsonResponse<AgentReport>(output);
+  }
+
+  async generateMetaReport(sessions: MetaSession[]): Promise<AgentReport> {
+    // 세션별 요약 정보
+    const sessionInfo = sessions.map((s, i) => ({
+      session: i + 1,
+      prompt: s.prompt,
+      analyzed_at: s.analyzed_at,
+      account_count: s.accounts.length,
+    }));
+
+    // 중복 계정 제거 후 전체 계정 목록 구성
+    const seenUsernames = new Set<string>();
+    const allAccounts: FullAnalysisData[] = [];
+    for (const session of sessions) {
+      for (const acc of session.accounts) {
+        const uname = acc.profile?.username;
+        if (uname && !seenUsernames.has(uname)) {
+          seenUsernames.add(uname);
+          allAccounts.push(acc);
+        }
+      }
+    }
+
+    const compressedData = allAccounts.map(acc => this.compressForMetaAnalysis(acc));
+    const totalAccounts = allAccounts.length;
+
+    let prompt = META_SYNTHESIS_PROMPT;
+    prompt = prompt.replace('[META_SESSIONS_PLACEHOLDER]', JSON.stringify(sessionInfo, null, 2));
+    prompt = prompt.replace('[SCRAPED_DATA_PLACEHOLDER]', JSON.stringify(compressedData, null, 2));
+    prompt = prompt.replace(/\[SESSION_COUNT\]/g, String(sessions.length));
+    prompt = prompt.replace(/\[TOTAL_ACCOUNTS\]/g, String(totalAccounts));
+
+    const response = await this.ai_client.models.generateContent({
+      model: 'gemini-3.1-pro-preview',
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const output = response.text;
+    if (!output) throw new Error('Empty AI response');
 
     return this.parseJsonResponse<AgentReport>(output);
   }

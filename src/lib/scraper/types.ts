@@ -6,6 +6,7 @@ export interface ScrapedProfile {
   following_count: number;
   posts_count: number;
   profile_image_url?: string;
+  profile_image_data?: { base64: string; mimeType: string };
   is_verified?: boolean;
 }
 
@@ -33,9 +34,10 @@ export interface SupportingAccount {
 
 export interface AgentReport {
   summary: string;
-  keyPatterns: string[];
-  visualTrends: string[];
-  captionTrends: string[];
+  summary_keywords: string[];
+  keyPatterns: { pattern: string; observed: string; implication: string }[];
+  visualTrends: { title: string; description: string }[];
+  captionTrends: { title: string; description: string }[];
   swot: {
     strengths: string[];
     weaknesses: string[];
